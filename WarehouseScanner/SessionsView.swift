@@ -2,15 +2,9 @@ import SwiftUI
 
 struct SessionsView: View {
     @EnvironmentObject var lang: LangStore   // đổi ngôn ngữ thì làm mới màn hình
-    @EnvironmentObject var store: AppStore
-    @State private var sessions: [ReceivingSession] = []
-    @State private var loading = false
-    @State private var error: String?
+    @EnvironmentObject var auth: AuthStore
     @State private var showSettings = false
-    @State private var showNew = false
-    @State private var created: ReceivingSession?
-    @State private var openCreated = false
-    // Phiên công ty (thử, chỉ đọc): danh sách lấy từ API công ty; phiên được chọn chỉ ghi nhớ trên máy, chưa ghi gì lên công ty.
+    // Phiên công ty: danh sách lấy từ API công ty.
     @State private var coSessions: [CompanySession] = []
     @State private var coError: String?
     @State private var coLoading = false
@@ -21,12 +15,9 @@ struct SessionsView: View {
 
     var body: some View {
         List {
-            if let error {
-                Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.accent)
-            }
             Section {
                 if !CompanyAPI.shared.isSignedIn {
-                    Text("Chưa đăng nhập công ty. Vào Cài đặt (bánh răng) → Kết nối công ty để đăng nhập.").foregroundStyle(.secondary)
+                    Text("Chưa đăng nhập công ty.").foregroundStyle(.secondary)
                 } else if let coError {
                     Label(coError, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent)
                 } else if coSessions.isEmpty && !coLoading {
@@ -52,54 +43,25 @@ struct SessionsView: View {
                     }
                 }
                 if CompanyAPI.shared.isSignedIn {
-                    Button { showCoNew = true } label: { Label("Tạo phiên thử trên công ty (ghi)", systemImage: "plus.circle") }
+                    Button { showCoNew = true } label: { Label("Tạo phiên mới trên công ty", systemImage: "plus.circle") }
                 }
-            } header: { Text("Phiên công ty đang mở (thử)") }
-              footer: { Text(coSelectedId > 0 ? "Đang chọn \(coSelectedLabel). Chạm phiên để xem kiện. Chưa ghi gì lên công ty." : "Chạm một phiên để xem các kiện đã quét và chọn dùng thử. Chưa ghi gì lên công ty.") }
+            } header: { Text("Phiên đang mở trên công ty") }
+              footer: { Text(coSelectedId > 0 ? "Đang chọn \(coSelectedLabel). Chạm phiên để xem kiện và quét." : "Chạm một phiên để xem các kiện đã quét và bắt đầu quét.") }
 
-            Section(tr("Phiên đang mở trên web")) {
-                if sessions.isEmpty && !loading {
-                    Text(tr("Chưa có phiên nào đang mở. Hãy tạo phiên trên web (nút \"Bắt đầu phiên mới\"), rồi kéo xuống hoặc bấm ↻ để làm mới.")).foregroundStyle(.secondary)
-                }
-                ForEach(sessions) { s in
-                    NavigationLink(value: s) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(s.title).font(.headline)
-                                Text(s.carrierName).font(.subheadline).foregroundStyle(Color.accent)
-                                Spacer()
-                                Text("\(s.scannedCount) / \(s.totalExpectedPackages)").font(.title3.monospacedDigit().bold())
-                            }
-                            Text([s.licensePlate, s.driverName, s.gateCode].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
         }
-        .overlay { if loading && sessions.isEmpty { ProgressView() } }
+        .overlay { if coLoading && coSessions.isEmpty { ProgressView() } }
         .navigationTitle(tr("Phiên nhận hàng"))
-        .navigationDestination(for: ReceivingSession.self) { SessionDetailView(session: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { Button { showSettings = true } label: { Image(systemName: "gearshape") } }
-            ToolbarItem(placement: .topBarTrailing) { Button { Task { await load(); await loadCompany() } } label: { Image(systemName: "arrow.clockwise") } }
-            ToolbarItem(placement: .topBarTrailing) { Button { showNew = true } label: { Image(systemName: "plus.circle.fill") }.accessibilityLabel(tr("Bắt đầu phiên mới")) }
+            ToolbarItem(placement: .topBarTrailing) { Button { Task { await loadCompany() } } label: { Image(systemName: "arrow.clockwise") } }
+            ToolbarItem(placement: .topBarTrailing) { Button { showCoNew = true } label: { Image(systemName: "plus.circle.fill") }.accessibilityLabel(tr("Tạo phiên mới trên công ty")) }
         }
         .sheet(isPresented: $showSettings, onDismiss: { Task { await loadCompany() } }) { NavigationStack { SettingsView() } }
         .sheet(isPresented: $showCoNew, onDismiss: { Task { await loadCompany() } }) {
             NavigationStack { CompanyNewSessionView(carriers: coCarriers) }
         }
-        .sheet(isPresented: $showNew, onDismiss: {
-            if created != nil { openCreated = true }       // tạo xong → vào quét ngay (giống web)
-        }) {
-            NavigationStack { NewSessionView { s in created = s } }
-        }
-        .navigationDestination(isPresented: $openCreated) {
-            if let s = created { SessionDetailView(session: s) }
-        }
-        .onChange(of: openCreated) { open in if !open { created = nil; Task { await load() } } }
-        .task { await loadCompany(); await store.refresh(); await load(); _ = await PhotoOutbox.flush(api: store.api) }   // gửi bù ảnh label còn sót
-        .refreshable { await load(); await loadCompany() }
+        .task { await loadCompany() }
+        .refreshable { await loadCompany() }
     }
 
     /// Tên hãng của phiên: ưu tiên tên API trả kèm, rồi tra theo id trong danh sách hãng; không có thì hiện id.
@@ -151,7 +113,7 @@ struct SessionsView: View {
         return out.string(from: d)
     }
 
-    /// Chỉ đọc: GET receiving-sessions?status=OPEN. Lỗi của server cũ không ảnh hưởng mục này (và ngược lại).
+    /// GET receiving-sessions?status=OPEN.
     private func loadCompany() async {
         guard CompanyAPI.shared.isSignedIn else { coSessions = []; coError = nil; return }
         coLoading = true
@@ -164,16 +126,9 @@ struct SessionsView: View {
             coSessions = list.sorted { $0.id > $1.id }
             coError = nil
         } catch {
+            if let e = error as? CompanyError, e.status == 401 { auth.signOut(); return }   // hết hạn đăng nhập → về màn đăng nhập
             coError = error.localizedDescription
         }
-    }
-
-    private func load() async {
-        guard store.hasServer else { return }
-        loading = true
-        defer { loading = false }
-        do { sessions = try await store.api.openSessions(); error = nil }
-        catch { self.error = error.localizedDescription }
     }
 }
 

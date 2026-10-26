@@ -51,16 +51,6 @@ final class AutoScanViewModel: ObservableObject {
     private var hintTask: Task<Void, Never>?
 
     let session: ReceivingSession
-    var api: APIClient?
-    /// Chụp khung hình camera ngay lúc quét (do AutoScanView gắn vào).
-    var snapshotProvider: (() async -> Data?)?
-    /// Tự chụp ảnh label cho từng lần quét (bật/tắt trong Cài đặt).
-    static let autoShotKey = "autoLabelShot"
-    private var autoShot: Bool { UserDefaults.standard.object(forKey: Self.autoShotKey) as? Bool ?? false }
-    private var pendingShots: [Data] = []                 // ảnh của các tracking chưa có thông tin (chưa có kiện để gắn)
-    private var shotByCode: [String: Task<Data?, Never>] = [:]   // ảnh chụp NGAY LÚC THẤY mã vạch (không đợi hết cửa sổ đọc / lúc gửi)
-    @Published var photosPending = 0                      // ảnh label đang chờ gửi (lưu trên ổ đĩa iPhone)
-    private var photoTask: Task<Void, Never>?
     var matcher = RuleMatcher(rules: [])
 
     /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
@@ -86,12 +76,12 @@ final class AutoScanViewModel: ObservableObject {
     private var lastLabel: (text: String, group: String)?     // mã kho của tem đang quét (dùng cho các tracking tiếp theo của cùng tem)
     private var timerTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
-    /// Khác nil: quét vào phiên CÔNG TY (ghi thật lên apiwh-dev). nil: quét về server cũ như trước.
-    var company: CompanyScanTarget?
+    /// Phiên công ty đang quét (ghi thật lên apiwh-dev).
+    let company: CompanyScanTarget
     private var coPending: [String] = []       // tracking chưa có thông tin của tem đang quét (tối đa 3, chỉ lưu trong bộ nhớ)
     private var coPendingText = ""             // mã kho của tem đang quét
 
-    init(session: ReceivingSession) { self.session = session }
+    init(session: ReceivingSession, company: CompanyScanTarget) { self.session = session; self.company = company }
 
     func stop() {
         timerTask?.cancel()
@@ -164,15 +154,6 @@ final class AutoScanViewModel: ObservableObject {
             if let f = failCooldown[code], now.timeIntervalSince(f) < 8 { showHint(tr("Tem này vừa báo lỗi — đợi vài giây rồi đưa lại")); continue }   // vừa báo FAIL, đừng báo lặp
             if let t = cooldown[code], now.timeIntervalSince(t) < 1.5 { continue }
 
-            // Chụp khung hình ngay khi thấy mã vạch lần đầu (lúc này tem đang nằm trong khung, rõ nhất)
-            if autoShot, shotByCode[code] == nil {
-                let t = Task { await self.snapshotProvider?() }
-                shotByCode[code] = t
-                for other in barcodes {
-                    let o = other.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !o.isEmpty, o != code, !Self.isEndCode(o), shotByCode[o] == nil { shotByCode[o] = t }   // cùng khung hình
-                }
-            }
             suppressTextUntil = .distantPast      // tem mới vào khung: chữ mã kho của nó không được bị chặn
             if pending == nil {
                 begin(Pending(barcode: code, warehouse: nil, start: now))
@@ -289,96 +270,7 @@ final class AutoScanViewModel: ObservableObject {
     /// Gửi MỘT tracking. `extras` = các mã khác cùng thấy trên tem: nếu tracking này "ting" (chưa có thông tin) thì gửi tiếp
     /// mã kế tiếp theo thứ tự (tracking 2, 3); nếu đã "yes" hoặc NO NAME thì bỏ qua các mã còn lại (cùng một kiện).
     private func send(code: String, text: String, group: String, extras: [String] = []) async {
-        if let co = company { await sendCompany(co, code: code, text: text, group: group, extras: extras); return }
-        guard let api else { return }
-        // Chụp khung hình ngay lúc quét (song song với việc gửi lên server)
-        // Dùng ảnh đã chụp lúc thấy mã; nếu chưa có (vd. QR END CODE) thì chụp ngay bây giờ
-        let shotTask: Task<Data?, Never>? = shotByCode[code] ?? (autoShot ? Task { await self.snapshotProvider?() } : nil)
-        var keepShot = false                  // mất mạng: giữ ảnh để lần gửi lại vẫn dùng đúng ảnh này
-        defer { if !keepShot { shotByCode[code] = nil } }
-        do {
-            let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text, others: extras)   // gửi cả các mã cùng tem một lần
-            if skippedAt[code] != nil { skippedAt[code] = nil; skipped = max(skipped - 1, 0) }
-            let status = data.status ?? "SUCCESS"
-            if status == "TRACK" {
-                // Tracking chưa có thông tin: "ting", ghi lại, chờ tracking tiếp theo hoặc END CODE
-                let seq = data.seq ?? (pendingTracks + 1)
-                pendingTracks = seq
-                if let d = await shotTask?.value { pendingShots.append(d); if pendingShots.count > 4 { pendingShots.removeFirst() } }
-                let needEnd = data.needEndCode == true
-                if needEnd { endRequired = true }
-                let msg = needEnd ? "Đủ 3 tracking — bấm nút END CODE" : tr("Tracking {0}/3 chưa có thông tin", seq)
-                entries.insert(ScanEntry(barcode: code, warehouseText: (text.isEmpty || text == code) ? nil : text, status: .tracked, note: msg), at: 0)
-                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: msg, track: seq)
-                Haptics.warning()
-                AudioServicesPlaySystemSound(1103)   // "ting"
-                if let next = extras.first { await send(code: next, text: text, group: group, extras: Array(extras.dropFirst())) }
-                return
-            }
-            guard let item = data.item else { return }
-            // Gắn ảnh label: các tracking trước đó trên tem + khung hình của lần quét này
-            var shots = pendingShots
-            pendingShots = []
-            if let d = await shotTask?.value { shots.append(d) }
-            queuePhotos(shots, for: item)
-            let noName = status == "NO_NAME"
-            pendingTracks = 0
-            endRequired = false
-            sent += 1
-            lastItem = item
-            let g = item.customerGroup ?? group
-            let shown = item.barcode
-            let wh = item.detectedWarehouseCode ?? (group.isEmpty || text == code || text == shown ? nil : text)   // ô Mã kho chỉ nhận mã kho thật (khớp quy tắc), không bao giờ là tracking
-            entries.insert(ScanEntry(barcode: shown, warehouseText: wh, group: g, status: noName ? .noName : .sent, note: noName ? "NO NAME" : nil), at: 0)
-            last = LastResult(barcode: shown, group: g, warehouseText: wh, message: nil, businessType: item.businessType, unknown: item.exceptionStatus == "UNKNOWN", noName: noName)
-            if noName { Haptics.warning(); AudioServicesPlaySystemSound(1103) }
-            else { Haptics.success(); AudioServicesPlaySystemSound(1057) }   // "yes"
-        } catch let e as APIError {
-            if e.isEndCodeRequired {
-                // Đã đủ 3 tracking không có thông tin mà quét tiếp -> pop-up chặn, bắt buộc quét QR END CODE
-                done.remove(code)
-                for x in extras { done.remove(x) }
-                endRequired = true
-                pendingTracks = 3
-                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Bắt buộc bấm nút END CODE", endBlocked: true)
-                Haptics.warning()
-                AudioServicesPlaySystemSound(1053)
-                return
-            }
-            if e.code == "NO_PENDING_TRACKS" {
-                banner = tr("Chưa có tracking nào đang chờ — không cần END CODE")
-                endRequired = false; pendingTracks = 0       // server không còn tem nào đang chờ -> gỡ pop-up chặn
-                Task { try? await Task.sleep(nanoseconds: 3_000_000_000); banner = nil }
-                return
-            }
-            if e.isDuplicate {
-                skipped += 1
-                entries.insert(ScanEntry(barcode: code, warehouseText: text == code ? nil : text, status: .duplicate, note: tr("Đã quét trước đó")), at: 0)
-                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: tr("Mã đã quét trong phiên"), duplicate: true)
-                Haptics.warning()
-                AudioServicesPlaySystemSound(1053)
-            } else if e.isNetwork {
-                keepShot = true
-                enqueue(code: code, text: text, group: group)
-            } else if e.code == "TRACKING_NOT_FOUND" {
-                // Rule ẩn "chỉ nhận mã có trong danh sách" (server bỏ comment RULE AN): báo FAIL
-                done.remove(code)
-                failCooldown[code] = Date()
-                failed += 1
-                entries.insert(ScanEntry(barcode: code, warehouseText: text, status: .rejected, note: e.message), at: 0)
-                last = LastResult(barcode: code, group: nil, warehouseText: text, message: e.message, failed: true)
-                Haptics.warning()
-                AudioServicesPlaySystemSound(1053)
-            } else {
-                done.remove(code)
-                skipped += 1
-                entries.insert(ScanEntry(barcode: code, warehouseText: text, status: .rejected, note: e.message), at: 0)
-                last = LastResult(barcode: code, group: nil, warehouseText: text, message: e.message)
-            }
-        } catch {
-            keepShot = true
-            enqueue(code: code, text: text, group: group)
-        }
+        await sendCompany(company, code: code, text: text, group: group, extras: extras)
     }
 
     // MARK: Quét vào phiên công ty (GHI thật)
@@ -514,52 +406,13 @@ final class AutoScanViewModel: ObservableObject {
 
     // MARK: Ảnh label (gắn vào kiện vừa gửi; nhân viên VN kiểm duyệt trên web)
 
-    /// Lưu ảnh vào hàng đợi trên ổ đĩa rồi gửi; ảnh chỉ bị xóa sau khi server xác nhận nhận được (xem PhotoOutbox).
-    private func queuePhotos(_ shots: [Data], for item: ScannedItem) {
-        for jpeg in shots { PhotoOutbox.save(jpeg, itemId: item.id.value) }
-        photosPending = PhotoOutbox.count
-        startPhotoFlush()
-    }
-
-    /// Gửi các ảnh còn trong hàng đợi, thử lại mỗi 5 giây cho tới khi hết (cũng gửi bù ảnh của các lần quét trước).
-    func startPhotoFlush() {
-        guard photoTask == nil else { return }
-        photoTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                guard let api = self.api else { self.photoTask = nil; return }
-                let left = await PhotoOutbox.flush(api: api)
-                self.photosPending = left
-                if left == 0 { self.photoTask = nil; return }
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-            }
-        }
-    }
-
     func uploadLabelPhoto(_ image: UIImage, for item: ScannedItem) async {
         guard let jpeg = image.resized(maxSide: 1600).jpegData(compressionQuality: 0.7) else { return }
         do {
-            if company != nil { try await CompanyAPI.shared.uploadLabelPhoto(trackingId: item.id.value, jpeg: jpeg) }
-            else if let api { _ = try await api.uploadLabelPhoto(itemId: item.id, jpeg: jpeg) }
-            else { return }
+            try await CompanyAPI.shared.uploadLabelPhoto(trackingId: item.id.value, jpeg: jpeg)
             banner = tr("Đã gửi ảnh label cho {0}", item.barcode)
         } catch {
             banner = tr("Gửi ảnh label thất bại: {0}", error.localizedDescription)
-        }
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-        banner = nil
-    }
-
-    // MARK: Ảnh hàng hỏng (tuỳ chọn, gắn vào kiện vừa gửi)
-
-    func uploadDamagePhoto(_ image: UIImage, for item: ScannedItem) async {
-        if company != nil { banner = "Phiên công ty: chưa hỗ trợ ảnh hỏng"; return }
-        guard let api, let jpeg = image.resized(maxSide: 1600).jpegData(compressionQuality: 0.7) else { return }
-        do {
-            _ = try await api.uploadDamagePhoto(itemId: item.id, jpeg: jpeg)
-            banner = tr("Đã gửi ảnh hỏng cho {0}", item.barcode)
-        } catch {
-            banner = tr("Gửi ảnh thất bại: {0}", error.localizedDescription)
         }
         try? await Task.sleep(nanoseconds: 3_000_000_000)
         banner = nil

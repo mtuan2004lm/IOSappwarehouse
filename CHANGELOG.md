@@ -9,6 +9,14 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-26 · ⭐ 📱 Bỏ toàn bộ phần web cũ, app chỉ dùng hệ thống công ty
+- ⭐ App không còn nói chuyện với server cũ (`http://...:3000`). Chỉ còn API công ty (`apiwh-dev.tinashipping.com/api`).
+- **Đăng nhập thật:** `AuthStore` gọi `CompanyAPI.login` (POST `/auth/login`), token lưu Keychain, mật khẩu không lưu. `LoginView` bỏ chữ "bản thử". Hết hạn đăng nhập (401) khi tải danh sách phiên → tự về màn đăng nhập.
+- **Đã xoá file:** `NewSessionView.swift`, `SessionDetailView.swift`, `PhotoOutbox.swift`. **Đã xoá code:** struct `APIClient` (server cũ) và các model cũ trong `Models.swift` (`ListResponse`, `ScanData`, `SessionItem`, `APIError`…), `CompanyAPI.readOnlyReport`.
+- `SessionsView`: bỏ mục "Phiên đang mở trên web", nút + giờ tạo phiên trên công ty. `SettingsView`: bỏ ô địa chỉ server, bỏ form đăng nhập công ty trong Cài đặt (đăng nhập ở màn đầu), bỏ công tắc "Tự chụp ảnh label"; còn tài khoản + đăng xuất, ngôn ngữ, bản app, quy tắc mã kho. `AppStore`: chỉ còn quy tắc mã kho cài sẵn.
+- `AutoScanViewModel` / `AutoScanView`: bắt buộc có `CompanyScanTarget`; bỏ đường gửi server cũ, báo hỏng bằng ảnh đơn giản cũ, hàng đợi ảnh, tự chụp ảnh, đồng bộ số đếm 1 giây, nút "Kết thúc phiên" (đóng phiên công ty không làm từ app). Menu ⋯ chỉ còn "Dừng quét" (dừng trên máy, không đổi gì trên công ty).
+- 🔥 Chưa làm: bỏ `NSAllowsArbitraryLoads` và `NSLocalNetworkUsageDescription` trong `project.yml` / `Info.plist` (không còn cần cho server nội bộ). Chưa build Xcode: cần Run và thử đăng nhập → danh sách phiên → quét → END CODE → báo hỏng.
+
 ### 2026-10-26 · 📱 Báo hư hỏng của kiện trên điện thoại (phiên công ty, GHI thật)
 - ⭐ Ở màn quét phiên công ty, nút "Hỏng" (sau khi kiện vừa ghi) mở bảng **Báo hư hỏng** giống web: 1) Loại hư hỏng (lưới 2 cột, chọn nhiều; danh sách lấy từ `GET /damage-types`) → 2) Ảnh hư hỏng (chụp, tối đa 10, xoá được từng ảnh) → 3) **Quyết định ở cuối cùng** (Nhận hàng / Từ chối) → nút "Gửi báo cáo" (cần chọn ≥1 loại, có hộp xác nhận).
 - Gửi bằng `POST /trackings/{id}/damage-report` (multipart: `damageTypeCodes` lặp từng mã, `decision` RECEIVED|REJECTED, `files`). Mỗi kiện chỉ 1 báo cáo (gửi lần hai: 409, app hiện lỗi). Từ chối → công ty chuyển kiện sang trả người bán; kiện đã vào thùng công ty không cho từ chối.

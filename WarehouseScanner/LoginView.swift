@@ -9,7 +9,7 @@ struct LoginView: View {
     @FocusState private var focus: Field?
     private enum Field { case email, password }
 
-    private var canSubmit: Bool { !auth.isLoading }   // bản thử: bấm là vào, không bắt nhập
+    private var canSubmit: Bool { !auth.isLoading }
 
     var body: some View {
         ZStack {
@@ -19,7 +19,7 @@ struct LoginView: View {
                     languageToggle
                     header
                     form
-                    Text(tr("Bản thử · chưa kết nối hệ thống công ty"))
+                    Text(tr("Đăng nhập bằng tài khoản kho của công ty"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 24)
@@ -71,8 +71,7 @@ struct LoginView: View {
     private var form: some View {
         VStack(spacing: 14) {
             field(icon: "person") {
-                TextField(tr("Email hoặc tên đăng nhập"), text: $email)
-                    .keyboardType(.emailAddress)
+                TextField(tr("Tên đăng nhập"), text: $email)
                     .textContentType(.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()

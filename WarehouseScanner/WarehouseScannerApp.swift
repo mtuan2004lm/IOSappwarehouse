@@ -21,12 +21,7 @@ struct WarehouseScannerApp: App {
 }
 
 struct RootView: View {
-    @EnvironmentObject var store: AppStore
-    @State private var showSettings = false
-
     var body: some View {
         NavigationStack { SessionsView() }
-            .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
-            .onAppear { if !store.hasServer { showSettings = true } }
     }
 }

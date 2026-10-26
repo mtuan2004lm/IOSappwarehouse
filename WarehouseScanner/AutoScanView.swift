@@ -5,29 +5,23 @@ import SwiftUI
 struct AutoScanView: View {
     @EnvironmentObject var lang: LangStore   // đổi ngôn ngữ thì làm mới màn hình
     let session: ReceivingSession
-    var company: CompanyScanTarget? = nil      // khác nil: quét vào phiên công ty (ghi thật)
+    let company: CompanyScanTarget            // phiên công ty đang quét (ghi thật)
     @EnvironmentObject var store: AppStore
     @StateObject private var camera = CameraEngine()
     @StateObject private var vm: AutoScanViewModel
     @State private var showPhoto = false
     @State private var photoTarget: ScannedItem?
-    @State private var photoIsLabel = false      // true: ảnh label · false: ảnh báo hỏng
     @State private var showHistory = false
     @State private var showDamage = false          // phiên công ty: bảng báo hư hỏng
     @Environment(\.dismiss) private var dismiss
     @State private var paused = false              // đã dừng quét (chốt kiện)
     @State private var confirmStop = false
-    @State private var confirmClose = false
-    @State private var working = false
-    @State private var actionError: String?
     @State private var finalCount = 0
-    @State private var serverScanned: Int?        // số đã quét theo server (cập nhật ~1 giây như web)
 
-    init(session: ReceivingSession, company: CompanyScanTarget? = nil) {
+    init(session: ReceivingSession, company: CompanyScanTarget) {
         self.session = session
         self.company = company
-        let model = AutoScanViewModel(session: session)
-        model.company = company
+        let model = AutoScanViewModel(session: session, company: company)
         _vm = StateObject(wrappedValue: model)
     }
 
@@ -50,12 +44,6 @@ struct AutoScanView: View {
                                 .font(.footnote.bold()).foregroundStyle(.white)
                                 .padding(.horizontal, 12).padding(.vertical, 6)
                                 .background(Color.accent.opacity(0.9), in: Capsule())
-                        }
-                        if vm.photosPending > 0 {
-                            Label(tr("{0} ảnh label đang chờ gửi", vm.photosPending), systemImage: "photo.on.rectangle.angled")
-                                .font(.footnote.bold()).foregroundStyle(.white)
-                                .padding(.horizontal, 12).padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6), in: Capsule())
                         }
                         if let b = vm.banner {
                             Text(b).font(.footnote.bold()).padding(8).background(.ultraThinMaterial, in: Capsule())
@@ -88,23 +76,18 @@ struct AutoScanView: View {
             }
             .padding(.top, 8)
 
-            // Đã dừng quét: che camera, chỉ còn Tiếp tục / Kết thúc phiên
+            // Đã dừng quét: che camera, chỉ còn Tiếp tục / Quay lại
             if paused {
                 ZStack {
                     Color.black.opacity(0.88).ignoresSafeArea()
                     VStack(spacing: 14) {
                         Image(systemName: "pause.circle.fill").font(.system(size: 56)).foregroundStyle(Color.accent)
                         Text(tr("ĐÃ DỪNG QUÉT")).font(.title2.weight(.heavy))
-                        Text(tr("Đã chốt {0} kiện", finalCount)).font(.title3.bold()).foregroundStyle(Color.okGreen)
-                        if let e = actionError { Text(e).font(.footnote).foregroundStyle(Color.accent).multilineTextAlignment(.center) }
+                        Text(tr("Đã quét {0} kiện", finalCount)).font(.title3.bold()).foregroundStyle(Color.okGreen)
                         Button { resumeScanning() } label: {
                             Text(tr("Tiếp tục quét")).font(.headline).frame(maxWidth: .infinity, minHeight: 50)
                         }
                         .buttonStyle(.borderedProminent).tint(.accent)
-                        Button(role: .destructive) { confirmClose = true } label: {
-                            Text(tr("Kết thúc phiên")).font(.headline).frame(maxWidth: .infinity, minHeight: 50)
-                        }
-                        .buttonStyle(.bordered)
                         Button(tr("Quay lại danh sách phiên")) { dismiss() }.foregroundStyle(.secondary)
                     }
                     .foregroundStyle(.white).padding(24).frame(maxWidth: 380)
@@ -133,14 +116,6 @@ struct AutoScanView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { startScanning() }
-        .task {
-            // Đồng bộ số ĐÃ GỬI với server mỗi 1 giây (đơn xoá/thêm trên web hoặc máy khác cũng hiện ngay)
-            while !Task.isCancelled {
-                await pollServerCount()
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-        }
-        .onChange(of: vm.sent) { _ in Task { await pollServerCount() } }
         .onDisappear {
             vm.stop()
             camera.ocrEnabled = false
@@ -151,7 +126,7 @@ struct AutoScanView: View {
             PhotoPicker(onImage: { img in
                 showPhoto = false
                 if let item = photoTarget {
-                    Task { if photoIsLabel { await vm.uploadLabelPhoto(img, for: item) } else { await vm.uploadDamagePhoto(img, for: item) } }
+                    Task { await vm.uploadLabelPhoto(img, for: item) }
                 }
             }, onCancel: { showPhoto = false })
             .ignoresSafeArea()
@@ -160,67 +135,26 @@ struct AutoScanView: View {
         .sheet(isPresented: $showDamage, onDismiss: { startScanning() }) {
             if let item = photoTarget { CompanyDamageSheet(item: item) }
         }
-        .alert(tr("Dừng quét và chốt kiện?"), isPresented: $confirmStop) {
+        .alert(tr("Dừng quét?"), isPresented: $confirmStop) {
             Button(tr("Huỷ"), role: .cancel) {}
             Button(tr("Dừng quét")) { Task { await stopScanning() } }
-        } message: { Text(tr("Chốt số kiện của phiên = số đã quét ({0}).", vm.sent)) }
-        .alert(tr("Kết thúc phiên?"), isPresented: $confirmClose) {
-            Button(tr("Huỷ"), role: .cancel) {}
-            Button(tr("Kết thúc"), role: .destructive) { Task { await closeSession() } }
-        } message: { Text(tr("Sau khi kết thúc sẽ không quét thêm được.")) }
+        } message: { Text(tr("Đã quét {0} kiện. Phiên trên công ty vẫn mở.", vm.sent)) }
     }
 
-    // MARK: Dừng quét / kết thúc phiên (giống web: "Chốt kiện - END CODE" và "Kết thúc phiên")
+    // MARK: Dừng quét tạm thời (không đổi gì trên công ty)
 
     private func stopScanning() async {
-        working = true; actionError = nil
-        defer { working = false }
-        if company != nil {          // phiên công ty: chỉ dừng quét trên máy, không đổi gì trên công ty
-            finalCount = vm.sent
-            vm.stop(); camera.ocrEnabled = false; camera.stop()
-            paused = true
-            Haptics.success()
-            return
-        }
-        do {
-            let s = try await store.api.finalizeSession(id: session.id)
-            finalCount = s.totalExpectedPackages
-            vm.stop(); camera.ocrEnabled = false; camera.stop()
-            paused = true
-            Haptics.success()
-        } catch {
-            vm.banner = error.localizedDescription      // không dừng được thì vẫn tiếp tục quét
-            Haptics.error()
-        }
+        // Chỉ dừng quét trên máy, không đổi gì trên công ty.
+        finalCount = vm.sent
+        vm.stop(); camera.ocrEnabled = false; camera.stop()
+        paused = true
+        Haptics.success()
     }
 
-    private func pollServerCount() async {
-        if company != nil { return }
-        if let d = try? await store.api.sessionDetail(id: session.id) { serverScanned = d.session.scannedCount }
-    }
-
-    private func resumeScanning() { paused = false; actionError = nil; startScanning() }
-
-    private func closeSession() async {
-        working = true
-        defer { working = false }
-        if company != nil { dismiss(); return }     // không đóng phiên công ty từ app
-        do {
-            _ = try await store.api.closeSession(id: session.id)
-            Haptics.success()
-            dismiss()
-        } catch {
-            if paused { actionError = error.localizedDescription } else { vm.banner = error.localizedDescription }
-            Haptics.error()
-        }
-    }
+    private func resumeScanning() { paused = false; startScanning() }
 
     private func startScanning() {
-        vm.api = company == nil ? store.api : nil
         vm.matcher = store.matcher
-        vm.snapshotProvider = { [camera] in await camera.snapshot() }
-        vm.photosPending = PhotoOutbox.count
-        if vm.photosPending > 0 { vm.startPhotoFlush() }       // gửi bù ảnh còn sót từ lần quét trước
         camera.ocrEnabled = true                 // đọc cả mã vạch lẫn chữ mã kho trên cùng khung hình
         camera.onBarcodes = { codes in Task { @MainActor in vm.handle(barcodes: codes) } }
         camera.onTextLines = { lines in Task { @MainActor in vm.handle(lines: lines) } }
@@ -234,7 +168,7 @@ struct AutoScanView: View {
     private var sentCounter: some View {
         VStack(spacing: 0) {
             Text(tr("ĐÃ GỬI")).font(.caption.bold()).tracking(1.5).foregroundStyle(.white.opacity(0.7))
-            Text("\(serverScanned ?? vm.sent)").font(.system(size: 72, weight: .heavy, design: .monospaced)).foregroundStyle(Color.okGreen)
+            Text("\(vm.sent)").font(.system(size: 72, weight: .heavy, design: .monospaced)).foregroundStyle(Color.okGreen)
                 .minimumScaleFactor(0.5).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
@@ -254,13 +188,12 @@ struct AutoScanView: View {
             Spacer(minLength: 0)
             smallCounter(tr("BỎ QUA"), vm.skipped, .unknownGray)
             Menu {
-                Button { confirmStop = true } label: { Label(tr("Dừng quét (chốt kiện)"), systemImage: "pause.circle") }
-                Button(role: .destructive) { confirmClose = true } label: { Label(tr("Kết thúc phiên"), systemImage: "flag.checkered") }
+                Button { confirmStop = true } label: { Label(tr("Dừng quét"), systemImage: "pause.circle") }
             } label: {
                 Image(systemName: "ellipsis").font(.title3.bold()).foregroundStyle(.white)
                     .frame(width: 46, height: 46).background(Color.navy.opacity(0.9), in: Circle())
             }
-            .accessibilityLabel(tr("Dừng quét hoặc kết thúc phiên"))
+            .accessibilityLabel(tr("Dừng quét"))
         }
         .padding(.horizontal, 16)
     }
@@ -409,7 +342,6 @@ struct AutoScanView: View {
             roundButton(camera.torchOn ? "flashlight.on.fill" : "flashlight.off.fill") { camera.toggleTorch() }
             Button {
                 photoTarget = vm.lastItem
-                photoIsLabel = true
                 camera.stop()                    // nhả camera trước khi mở màn chụp ảnh
                 showPhoto = true
             } label: {
@@ -422,9 +354,8 @@ struct AutoScanView: View {
             .disabled(vm.lastItem == nil)
             Button {
                 photoTarget = vm.lastItem
-                photoIsLabel = false
                 camera.stop()                    // nhả camera trước khi mở màn chụp ảnh
-                if company != nil { showDamage = true } else { showPhoto = true }
+                showDamage = true
             } label: {
                 Label(tr("Hỏng"), systemImage: "camera.fill")
                     .font(.subheadline.bold()).lineLimit(1)
