@@ -1,0 +1,313 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02280F2AE248526A2A428A75 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5444F3566E12A3458262568 /* SettingsView.swift */; };
+		16AF19631CE2B50E0CE321E7 /* WarehouseScannerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC475CCDD68BC4E9DBEF6C4 /* WarehouseScannerApp.swift */; };
+		1C1B6D16DDBBE44CE7F821E1 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27BB428DE730E281D76081AD /* SessionsView.swift */; };
+		399A83F85F2A249DEE71E8E7 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EB3E8F749D4F8FE13DEDDE /* Extensions.swift */; };
+		3FCF8F36411E25ECA3478855 /* RuleMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A356C93F187C94FCED0A34 /* RuleMatcher.swift */; };
+		41E46A0AE84304AE444A1AD4 /* PhotoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EA75A2D9B9B934572A26F /* PhotoPicker.swift */; };
+		4DE9949D1C19F3D2AD951331 /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A37276EF7C2A360EF557EC94 /* CameraPreview.swift */; };
+		805A6232D3EC900D44609D82 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A5E9BA8482415525970AE5 /* Models.swift */; };
+		834D9266BA91BA345F904FFB /* CameraEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9632D7E598EE2E7E9DDFADED /* CameraEngine.swift */; };
+		92A4A1DA5FDCACEF17C87D2F /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E79EF67B3E0FF2D2D5379AFC /* APIClient.swift */; };
+		A55376DB9A850FBEC27D5DCD /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E5D15B542CECD5967F2F27 /* Theme.swift */; };
+		CC55A4CA8DAB40050D506CAC /* AutoScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE2EF75F3CE3FD5D344683 /* AutoScanViewModel.swift */; };
+		E7ADB4A83A1977085B61B4D1 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5E7A4D005CCEBE7D5CB12C /* AppStore.swift */; };
+		F23DE4E930E9F8EC34EED589 /* AutoScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A153297CE8B5FC0B9F7BDE /* AutoScanView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		27BB428DE730E281D76081AD /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
+		32FE2EF75F3CE3FD5D344683 /* AutoScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScanViewModel.swift; sourceTree = "<group>"; };
+		34EB3E8F749D4F8FE13DEDDE /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		3A0EA75A2D9B9B934572A26F /* PhotoPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoPicker.swift; sourceTree = "<group>"; };
+		44A356C93F187C94FCED0A34 /* RuleMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleMatcher.swift; sourceTree = "<group>"; };
+		4AC475CCDD68BC4E9DBEF6C4 /* WarehouseScannerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarehouseScannerApp.swift; sourceTree = "<group>"; };
+		4B5E7A4D005CCEBE7D5CB12C /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		72E5D15B542CECD5967F2F27 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		74A5E9BA8482415525970AE5 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		9632D7E598EE2E7E9DDFADED /* CameraEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraEngine.swift; sourceTree = "<group>"; };
+		A37276EF7C2A360EF557EC94 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
+		BB5944C6515D6D2B678426AB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E5444F3566E12A3458262568 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		E79EF67B3E0FF2D2D5379AFC /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		F5BF48AA40CAD7891EB709FC /* WarehouseScanner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WarehouseScanner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F9A153297CE8B5FC0B9F7BDE /* AutoScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScanView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DAF6AA633395B1B76148E35B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1629A0BB4117BEFC577EF28D = {
+			isa = PBXGroup;
+			children = (
+				D8DBA3F9900DD17689CA0C4D /* WarehouseScanner */,
+				1B94E9ABB967A5303EB000EB /* Config */,
+				A8CBE22D73EBCC4E5F27B59C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1B94E9ABB967A5303EB000EB /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				BB5944C6515D6D2B678426AB /* Info.plist */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		A8CBE22D73EBCC4E5F27B59C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F5BF48AA40CAD7891EB709FC /* WarehouseScanner.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D8DBA3F9900DD17689CA0C4D /* WarehouseScanner */ = {
+			isa = PBXGroup;
+			children = (
+				E79EF67B3E0FF2D2D5379AFC /* APIClient.swift */,
+				4B5E7A4D005CCEBE7D5CB12C /* AppStore.swift */,
+				F9A153297CE8B5FC0B9F7BDE /* AutoScanView.swift */,
+				32FE2EF75F3CE3FD5D344683 /* AutoScanViewModel.swift */,
+				9632D7E598EE2E7E9DDFADED /* CameraEngine.swift */,
+				A37276EF7C2A360EF557EC94 /* CameraPreview.swift */,
+				34EB3E8F749D4F8FE13DEDDE /* Extensions.swift */,
+				74A5E9BA8482415525970AE5 /* Models.swift */,
+				3A0EA75A2D9B9B934572A26F /* PhotoPicker.swift */,
+				44A356C93F187C94FCED0A34 /* RuleMatcher.swift */,
+				27BB428DE730E281D76081AD /* SessionsView.swift */,
+				E5444F3566E12A3458262568 /* SettingsView.swift */,
+				72E5D15B542CECD5967F2F27 /* Theme.swift */,
+				4AC475CCDD68BC4E9DBEF6C4 /* WarehouseScannerApp.swift */,
+			);
+			path = WarehouseScanner;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		42AEFBAE01D2DFD981F7DA7D /* WarehouseScanner */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CE2BB50980DFD48FF547D497 /* Build configuration list for PBXNativeTarget "WarehouseScanner" */;
+			buildPhases = (
+				FCA229C23F166EBB0BA5029E /* Sources */,
+				DAF6AA633395B1B76148E35B /* Frameworks */,
+				943E4BBD9B51C81965501BA3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WarehouseScanner;
+			productName = WarehouseScanner;
+			productReference = F5BF48AA40CAD7891EB709FC /* WarehouseScanner.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					42AEFBAE01D2DFD981F7DA7D = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 01076EBF22530E406F54B419 /* Build configuration list for PBXProject "WarehouseScanner" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1629A0BB4117BEFC577EF28D;
+			productRefGroup = A8CBE22D73EBCC4E5F27B59C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				42AEFBAE01D2DFD981F7DA7D /* WarehouseScanner */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		943E4BBD9B51C81965501BA3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FCA229C23F166EBB0BA5029E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				92A4A1DA5FDCACEF17C87D2F /* APIClient.swift in Sources */,
+				E7ADB4A83A1977085B61B4D1 /* AppStore.swift in Sources */,
+				F23DE4E930E9F8EC34EED589 /* AutoScanView.swift in Sources */,
+				CC55A4CA8DAB40050D506CAC /* AutoScanViewModel.swift in Sources */,
+				834D9266BA91BA345F904FFB /* CameraEngine.swift in Sources */,
+				4DE9949D1C19F3D2AD951331 /* CameraPreview.swift in Sources */,
+				399A83F85F2A249DEE71E8E7 /* Extensions.swift in Sources */,
+				805A6232D3EC900D44609D82 /* Models.swift in Sources */,
+				41E46A0AE84304AE444A1AD4 /* PhotoPicker.swift in Sources */,
+				3FCF8F36411E25ECA3478855 /* RuleMatcher.swift in Sources */,
+				1C1B6D16DDBBE44CE7F821E1 /* SessionsView.swift in Sources */,
+				02280F2AE248526A2A428A75 /* SettingsView.swift in Sources */,
+				A55376DB9A850FBEC27D5DCD /* Theme.swift in Sources */,
+				16AF19631CE2B50E0CE321E7 /* WarehouseScannerApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1B05A9D10F61E514E88AF240 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		6F0B85FC643AF9C218F627EA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		8951287761002419191396D2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XJV6B4PX32;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Kho Scanner";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tina.warehousescanner;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = NO;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		E67DED621DA82404399DCDC1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XJV6B4PX32;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Kho Scanner";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tina.warehousescanner;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = NO;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		01076EBF22530E406F54B419 /* Build configuration list for PBXProject "WarehouseScanner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6F0B85FC643AF9C218F627EA /* Debug */,
+				1B05A9D10F61E514E88AF240 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CE2BB50980DFD48FF547D497 /* Build configuration list for PBXNativeTarget "WarehouseScanner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E67DED621DA82404399DCDC1 /* Debug */,
+				8951287761002419191396D2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+}

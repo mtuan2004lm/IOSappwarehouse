@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Ứng dụng dùng camera để quét mã vạch và đọc mã kho trên nhãn hàng.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Ứng dụng kết nối tới server nhận hàng trong mạng nội bộ của kho.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Chọn ảnh hàng hỏng (chỉ dùng khi chạy trên giả lập).</string>
+</dict>
+</plist>

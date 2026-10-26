@@ -1,0 +1,35 @@
+# XcodeGen: sinh file WarehouseScanner.xcodeproj bang lenh `xcodegen generate`
+name: WarehouseScanner
+options:
+  bundleIdPrefix: com.tina
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated     # callback camera chay ngoai main thread
+    SWIFT_APPROACHABLE_CONCURRENCY: NO
+    CODE_SIGN_STYLE: Automatic
+targets:
+  WarehouseScanner:
+    type: application
+    platform: iOS
+    sources:
+      - path: WarehouseScanner
+    info:
+      path: Config/Info.plist
+      properties:
+        CFBundleDisplayName: Kho Scanner
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSCameraUsageDescription: Ứng dụng dùng camera để quét mã vạch và đọc mã kho trên nhãn hàng.
+        NSLocalNetworkUsageDescription: Ứng dụng kết nối tới server nhận hàng trong mạng nội bộ của kho.
+        NSPhotoLibraryUsageDescription: Chọn ảnh hàng hỏng (chỉ dùng khi chạy trên giả lập).
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true     # server nội bộ dùng http (không https)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tina.warehousescanner
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
