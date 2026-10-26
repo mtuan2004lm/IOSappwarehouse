@@ -9,6 +9,26 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-26 · 🔥 📱 Sửa lỗi 401 khi quét (làm mới token chạy chồng nhau)
+- 🔥 Nguyên nhân khả dĩ: khi token hết hạn, nhiều lệnh chạy song song (hỏi song song các mã ứng viên) cùng nhận 401 và **cùng đi làm mới token**. `refreshToken` chỉ dùng được một lần nên lần làm mới thứ hai bị từ chối → mất đăng nhập → lỗi 401 mọi lệnh sau.
+- ⭐ `CompanyAPI.refreshOnce`: chỉ một lần làm mới tại một thời điểm, các lệnh khác chờ kết quả rồi gọi lại. Làm mới thất bại (400/401/403) thì xoá token, báo `CompanyAPI.sessionExpired`, `AuthStore` về màn đăng nhập với thông báo "Hết phiên đăng nhập — vui lòng đăng nhập lại".
+- Cách xử lý tức thì khi gặp 401: ⚙️ → Đăng xuất → đăng nhập lại. Có thể 401 còn do đăng nhập cùng tài khoản ở nơi khác (web/iPhone khác) làm token cũ bị thu hồi — chưa xác nhận.
+- File: `APIClient.swift`, `AuthStore.swift`. Chưa build Xcode.
+
+### 2026-10-26 · 📱 Khớp mã kho khi OCR dính chữ phía trước + dòng OCR để gỡ lỗi
+- ⭐ `RuleMatcher`: bỏ tiền tố có cả tên hãng ("USPS DELIVER TO:", "FEDEX SHIP TO"…); nếu dòng vẫn không khớp thì thử bỏ dần tối đa 4 từ đầu dòng ("XYZ ABC FDVAT HUE" → "FDVAT HUE"). Mã kho gửi công ty là phần đã cắt sạch.
+- 🧪 Màn quét hiện 1 dòng chữ nhỏ **"OCR: …"** (tối đa 6 dòng chữ app đang đọc) để biết app đọc ra gì khi không ra mã kho. Chỉ để test, sẽ bỏ khi ổn định (`AutoScanViewModel.ocrDebug`, `AutoScanView.swift`).
+- Ghi nhận: gợi ý "Chưa thấy mã vạch — đưa mã vạch vào khung" chỉ hiện khi mã kho ĐÃ đọc được mà mã vạch chưa đọc được, nên khi thấy gợi ý đó thì mã kho không phải vấn đề.
+- File: `RuleMatcher.swift`, `AutoScanViewModel.swift`, `AutoScanView.swift`. Chưa build Xcode.
+
+### 2026-10-26 · 📱 Quét nhanh không kịp đọc mã kho: chờ lâu hơn + cảnh báo THIẾU MÃ KHO
+- ⭐ Cửa sổ chờ mã kho 1,0 → **2,5 giây**; mã kho vừa đọc được giữ **3 giây** (trước 1 giây) để tem kế tiếp dùng lại. Thời gian gom thêm tracking cùng tem giảm 0,7 → 0,5 giây nên tracking có đủ thông tin vẫn gửi nhanh.
+- ⭐ Hết giờ mà chưa có mã kho (tem mới): lần 1 hiện thẻ cam **THIẾU MÃ KHO**, rung + âm báo, **chưa gửi** lên công ty; đưa tem vào lại. Lần 2 (trong 60 giây) gửi không kèm mã kho để không bị kẹt. Tracking thứ 2, 3 của cùng tem vẫn dùng mã kho của tem đó.
+- Tem cũ rời khung mà chưa có mã kho thì chốt ngay khi tem mới vào (không bắt tem mới chờ hết 2,5 giây).
+- Thẻ TING hiện thêm "Công ty không có mã này. Đã thử: …" (các mã ứng viên đã hỏi công ty) để biết vì sao không ra SUCCESS xanh.
+- ⭐ `RuleMatcher.normalizeOCR` bỏ tiền tố "SHIP TO" / "DELIVER TO" / "TO" trước mã kho: tem USPS ghi `SHIP TO  SGHUE DOFA`, quy tắc FADO.VN neo đầu dòng nên trước đây không khớp nếu OCR đọc cả "SHIP TO" vào dòng. Chuỗi gửi công ty là mã kho đã bỏ tiền tố ("SGHUE DOFA"). 🔥 Chưa chắc đây là nguyên nhân duy nhất (chưa xem được dòng OCR thật trên iPhone).
+- 🔥 `window` 2,5 giây làm vòng tiến trình chạy lâu hơn. Nếu thấy chậm, chỉnh `window` trong `AutoScanViewModel.swift`. File: `AutoScanViewModel.swift`, `AutoScanView.swift`, `RuleMatcher.swift`. Chưa build Xcode.
+
 ### 2026-10-26 · ⭐ 📱 Bỏ toàn bộ phần web cũ, app chỉ dùng hệ thống công ty
 - ⭐ App không còn nói chuyện với server cũ (`http://...:3000`). Chỉ còn API công ty (`apiwh-dev.tinashipping.com/api`).
 - **Đăng nhập thật:** `AuthStore` gọi `CompanyAPI.login` (POST `/auth/login`), token lưu Keychain, mật khẩu không lưu. `LoginView` bỏ chữ "bản thử". Hết hạn đăng nhập (401) khi tải danh sách phiên → tự về màn đăng nhập.

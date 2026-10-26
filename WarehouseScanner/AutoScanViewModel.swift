@@ -26,6 +26,7 @@ struct LastResult: Equatable {
     var track: Int? = nil       // 1...3: tracking chưa có thông tin ("ting"), chờ tracking tiếp theo hoặc END CODE
     var noName: Bool = false    // true: quét END CODE -> kiện NO NAME (tracking đầu làm tracking gốc)
     var company: Bool = false   // true: kết quả quét vào phiên công ty (hiện thẻ riêng)
+    var noWarehouse: Bool = false // true: thấy mã vạch nhưng chưa đọc được mã kho -> yêu cầu đưa tem vào lại
     var endBlocked: Bool = false // true: đã đủ 3 tracking không có thông tin mà vẫn quét tiếp -> bị chặn
 }
 
@@ -47,6 +48,7 @@ final class AutoScanViewModel: ObservableObject {
     @Published var banner: String?
     @Published var pendingTracks = 0          // số tracking chưa có thông tin của tem đang quét (0...3)
     @Published var endRequired = false        // true: bắt buộc quét QR END CODE (pop-up chặn)
+    @Published var ocrDebug = ""            // các dòng chữ OCR đang đọc (hiện nhỏ trên màn quét để biết app đọc ra gì)
     @Published var hint: String?              // lý do app đang im lặng (vd. tem đã quét rồi) để không tưởng app hỏng
     private var hintTask: Task<Void, Never>?
 
@@ -54,7 +56,7 @@ final class AutoScanViewModel: ObservableObject {
     var matcher = RuleMatcher(rules: [])
 
     /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
-    let window: TimeInterval = 1.0
+    let window: TimeInterval = 2.5
 
     private struct Pending {
         var barcode: String?
@@ -73,6 +75,7 @@ final class AutoScanViewModel: ObservableObject {
     private var failCooldown: [String: Date] = [:]        // mã kho đã báo FAIL -> không báo lặp khi nhãn vẫn nằm trong khung
     private var retryList: [(code: String, text: String, group: String)] = []
     private var endCodeAt: Date?
+    private var noKhoMiss: [String: Date] = [:]            // mã vạch đã bị báo THIẾU MÃ KHO một lần (lần thứ hai thì gửi không kèm mã kho)
     private var lastLabel: (text: String, group: String)?     // mã kho của tem đang quét (dùng cho các tracking tiếp theo của cùng tem)
     private var timerTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
@@ -155,6 +158,8 @@ final class AutoScanViewModel: ObservableObject {
             if let t = cooldown[code], now.timeIntervalSince(t) < 1.5 { continue }
 
             suppressTextUntil = .distantPast      // tem mới vào khung: chữ mã kho của nó không được bị chặn
+            // Tem cũ đã rời khung mà chưa có mã kho: chốt ngay, không bắt tem mới chờ hết cửa sổ đọc
+            if let pb = pending?.barcode, pb != code, !barcodes.contains(pb), pending?.warehouse == nil { expire() }
             if pending == nil {
                 begin(Pending(barcode: code, warehouse: nil, start: now))
             } else if pending?.barcode == nil {
@@ -174,7 +179,7 @@ final class AutoScanViewModel: ObservableObject {
                 pending = p
             }
             // Mã kho có thể đã đọc được vài khung hình trước khi thấy mã vạch
-            if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 1.0 {
+            if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 3.0 {
                 pending?.warehouse = (text: r.text, group: r.group)
             }
             tryComplete()
@@ -183,6 +188,8 @@ final class AutoScanViewModel: ObservableObject {
     }
 
     func handle(lines: [String]) {
+        let shown = lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.prefix(6).joined(separator: " | ")
+        if !shown.isEmpty, shown != ocrDebug { ocrDebug = shown }
         guard let hit = matcher.firstMatch(inLines: lines) else { return }
         let now = Date()
         if now < suppressTextUntil { return }                                      // nhãn đã gửi vẫn trong khung
@@ -228,7 +235,7 @@ final class AutoScanViewModel: ObservableObject {
     private func tryComplete() {
         guard let p = pending, let code = p.barcode, let w = p.warehouse else { return }
         // Chờ thêm một chút để các mã khác trên cùng tem kịp vào khung (gửi cả nhóm một lần, tối đa 3 mã)
-        let wait = min(0.7, window * 0.7) - Date().timeIntervalSince(p.start)
+        let wait = 0.5 - Date().timeIntervalSince(p.start)
         if p.extras.count < 2 && wait > 0 {
             Task { [weak self] in try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)); self?.tryComplete() }
             return
@@ -248,8 +255,22 @@ final class AutoScanViewModel: ObservableObject {
         }
         // Có mã vạch nhưng chưa đọc được mã kho: vẫn gửi tracking (không bỏ sót ting / yes); mã kho lấy của tem đang quét nếu có
         guard let p, let code = p.barcode, p.warehouse == nil else { return }
-        let text = pendingTracks > 0 ? (lastLabel?.text ?? "") : ""
-        submit(code: code, text: text, group: lastLabel?.group ?? "", extras: p.extras)
+        // Tracking tiếp theo của cùng tem đang quét: dùng mã kho của tem đó
+        if pendingTracks > 0, let l = lastLabel {
+            submit(code: code, text: l.text, group: l.group, extras: p.extras)
+            return
+        }
+        // Tem mới mà chưa đọc được mã kho: lần đầu cảnh báo THIẾU MÃ KHO (chưa gửi) để đưa tem vào lại; lần hai gửi không kèm mã kho
+        if let t = noKhoMiss[code], Date().timeIntervalSince(t) < 60 {
+            noKhoMiss[code] = nil
+            submit(code: code, text: "", group: "", extras: p.extras)
+            return
+        }
+        noKhoMiss[code] = Date()
+        cooldown[code] = Date().addingTimeInterval(1.5)       // đợi ~3 giây rồi mới đọc lại
+        last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Chưa đọc được mã kho — đưa tem vào lại (chưa gửi lên công ty)", noWarehouse: true)
+        Haptics.warning()
+        AudioServicesPlaySystemSound(1053)
     }
 
     /// Đọc được mã kho nhưng chưa thấy mã vạch: không báo FAIL, chỉ nhắc nhẹ để đưa mã vạch vào khung.
@@ -358,8 +379,9 @@ final class AutoScanViewModel: ObservableObject {
                 let needEnd = seq >= 3
                 if needEnd { endRequired = true }
                 let msg = needEnd ? "Đủ 3 tracking — bấm nút END CODE" : tr("Tracking {0}/3 chưa có thông tin", seq)
-                entries.insert(ScanEntry(barcode: cut.primary, warehouseText: customer.isEmpty ? nil : customer, status: .tracked, note: msg), at: 0)
-                last = LastResult(barcode: cut.primary, group: nil, warehouseText: nil, message: msg, track: seq)
+                let tried = "Công ty không có mã này. Đã thử: " + cut.list.prefix(3).joined(separator: ", ")
+                entries.insert(ScanEntry(barcode: cut.primary, warehouseText: customer.isEmpty ? nil : customer, status: .tracked, note: msg + " · " + tried), at: 0)
+                last = LastResult(barcode: cut.primary, group: nil, warehouseText: nil, message: tried, track: seq)
                 Haptics.warning(); AudioServicesPlaySystemSound(1103)
                 if let next = extras.first { await sendCompany(co, code: next, text: text, group: group, extras: Array(extras.dropFirst())) }
             }

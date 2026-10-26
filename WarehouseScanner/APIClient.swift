@@ -330,6 +330,28 @@ actor CompanyAPI {
         KeychainStore.set(t.refreshToken, for: "refreshToken")
     }
 
+    /// Báo cho app biết phiên đăng nhập đã hết hạn hẳn (làm mới token thất bại) để quay về màn đăng nhập.
+    nonisolated static let sessionExpired = Notification.Name("company.sessionExpired")
+
+    private var refreshTask: Task<Void, Error>?
+
+    /// Nhiều lệnh cùng nhận 401 một lúc (vd. hỏi song song các mã ứng viên) chỉ được làm mới token MỘT lần;
+    /// refreshToken dùng một lần nên lần làm mới thứ hai sẽ bị từ chối và làm mất đăng nhập.
+    private func refreshOnce(usedToken: String?) async throws {
+        if KeychainStore.get("accessToken") != usedToken { return }       // lệnh khác đã làm mới xong
+        if let t = refreshTask { try await t.value; return }              // lệnh khác đang làm mới: chờ kết quả
+        let t = Task { try await self.refresh() }
+        refreshTask = t
+        defer { refreshTask = nil }
+        do { try await t.value }
+        catch let e as CompanyError where e.status == 400 || e.status == 401 || e.status == 403 {
+            KeychainStore.remove("accessToken")
+            KeychainStore.remove("refreshToken")
+            NotificationCenter.default.post(name: Self.sessionExpired, object: nil)
+            throw CompanyError(status: 401, code: "SESSION_EXPIRED", message: "Hết phiên đăng nhập — vui lòng đăng nhập lại")
+        }
+    }
+
     /// Làm mới token (refreshToken dùng một lần: mỗi lần làm mới nhận cặp token mới).
     private func refresh() async throws {
         guard let rt = KeychainStore.get("refreshToken") else {
@@ -475,7 +497,7 @@ actor CompanyAPI {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401, auth, retry {
             // Token hết hạn: làm mới một lần rồi gọi lại. Nếu lệnh khác đã làm mới rồi thì chỉ cần gọi lại.
-            if KeychainStore.get("accessToken") == usedToken { try await refresh() }
+            try await refreshOnce(usedToken: usedToken)
             return try await request(type, method, path, query: query, json: json, multipart: multipart, auth: auth, retry: false)
         }
         guard (200..<300).contains(status) else {

@@ -13,6 +13,10 @@ final class AuthStore: ObservableObject {
     init() {
         userEmail = UserDefaults.standard.string(forKey: CompanyAPI.userKey) ?? ""
         isSignedIn = CompanyAPI.shared.isSignedIn
+        // Làm mới token thất bại (hết hạn / đăng nhập nơi khác) → về màn đăng nhập
+        NotificationCenter.default.addObserver(forName: CompanyAPI.sessionExpired, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.isSignedIn = false }
+        }
     }
 
     /// Tên đăng nhập đã dùng lần trước, để điền sẵn vào ô đăng nhập.

@@ -48,6 +48,12 @@ struct AutoScanView: View {
                         if let b = vm.banner {
                             Text(b).font(.footnote.bold()).padding(8).background(.ultraThinMaterial, in: Capsule())
                         }
+                        if !vm.ocrDebug.isEmpty {
+                            Text("OCR: " + vm.ocrDebug).font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.85))
+                                .lineLimit(3).multilineTextAlignment(.leading)
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                        }
                         if let h = vm.hint {
                             Text(h).font(.footnote.bold()).foregroundStyle(.white).multilineTextAlignment(.center)
                                 .padding(.horizontal, 12).padding(.vertical, 6)
@@ -235,6 +241,14 @@ struct AutoScanView: View {
                         Text(tr("Tracking {0}/3 chưa có thông tin", n)).font(.subheadline.bold())
                         codeText(r.barcode)
                         if let m = r.message { Text(m).font(.footnote).opacity(0.9).multilineTextAlignment(.center) }
+                    }
+                }
+            } else if r.noWarehouse {
+                card(bg: Color.orange) {
+                    VStack(spacing: 4) {
+                        Text("THIẾU MÃ KHO").font(.system(size: 30, weight: .heavy))
+                        Text(r.message ?? "Đưa tem vào lại").font(.subheadline.bold()).multilineTextAlignment(.center)
+                        codeText(r.barcode)
                     }
                 }
             } else if r.noName {
