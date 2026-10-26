@@ -52,6 +52,7 @@ extension RuleMatcher {
     ///  - bỏ tiền tố "SHIP TO" / "TO" (vd. "SHIP TO SGHUE DOFA" -> "SGHUE DOFA")
     ///  - dấu gạch dưới "_" bị đọc thành khoảng trắng/gạch ngang: "SGVO A12" -> "SGVO_A12"
     ///  - số 0 bị đọc thay chữ O trong tiền tố: "SGV0_A12" -> "SGVO_A12"
+    ///  - "SG HUE DOFA16&." (số 8 bị đọc sai) -> "SG HUE_DOFA168"
     ///  - "SG FRAGILE DOFA168" (mất "_") -> "SG FRAGILE_DOFA168", nếu không sẽ bị nhầm sang FADO.VN (kinh doanh)
     /// Văn bản đã chuẩn hoá cũng là chuỗi được gửi lên server.
     static func normalizeOCR(_ s: String) -> String {
@@ -63,6 +64,9 @@ extension RuleMatcher {
         t = t.replacingOccurrences(of: #"^(SGV|HNV)0"#, with: "$1O", options: .regularExpression)
         t = t.replacingOccurrences(of: #"^(SGKYDUYEN|HNKYDUYEN|SGVO|HNVO|CHHEN)[ \-]"#, with: "$1_", options: .regularExpression)
         t = t.replacingOccurrences(of: #"^(SG HUE|SG FRAGILE)[ \-]DOFA168"#, with: "$1_DOFA168", options: .regularExpression)
+        // "168" hay bị đọc sai ("DOFA16&.", "DOFA165", "DOFA 168"…) → chuẩn hoá về "SG HUE_DOFA168" / "SG FRAGILE_DOFA168" (FADO 168),
+        // nếu không sẽ bị nhầm sang FADO.VN vì dòng bắt đầu bằng "SG HUE DOFA"
+        t = t.replacingOccurrences(of: #"^SG ?(HUE|FRAGILE)[ _\-]*DOFA\s*16\S*"#, with: "SG $1_DOFA168", options: .regularExpression)
         return t
     }
 }

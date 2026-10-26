@@ -9,6 +9,11 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-26 · ⭐ 📱 DOFA168 bị OCR đọc sai số 8 → nhầm sang FADO.VN
+- ⭐ Kiện `300470092728` ghi mã kho `SG HUE DOFA16&.` (đúng ra là `SG HUE_DOFA168`, nhóm FADO 168). Chữ "168" bị đọc sai và dòng bắt đầu bằng "SG HUE DOFA" nên rơi vào quy tắc FADO.VN (kinh doanh).
+- `RuleMatcher.normalizeOCR`: dòng bắt đầu `SG HUE` / `SG FRAGILE` + `DOFA` + `16…` (bất kỳ ký tự nào sau "16", có/không dấu cách hoặc `_`) → chuẩn hoá thành `SG HUE_DOFA168` / `SG FRAGILE_DOFA168`. Dòng `SG HUE DOFA` không có "16" vẫn là FADO.VN. Đã thử 8 chuỗi mẫu.
+- 🔥 Kiện đã tạo với mã kho sai thì app không sửa được (công ty không cho đổi mã khách sau khi tạo); xử lý trên web (tab "Sửa mã" / "Xử lý kiện"). Chưa xác nhận phần "tracking nhận sai" của kiện này (cần ảnh tem). File: `RuleMatcher.swift`. Chưa build Xcode.
+
 ### 2026-10-26 · 🔥 📱 Sửa lỗi 401 khi quét (làm mới token chạy chồng nhau)
 - 🔥 Nguyên nhân khả dĩ: khi token hết hạn, nhiều lệnh chạy song song (hỏi song song các mã ứng viên) cùng nhận 401 và **cùng đi làm mới token**. `refreshToken` chỉ dùng được một lần nên lần làm mới thứ hai bị từ chối → mất đăng nhập → lỗi 401 mọi lệnh sau.
 - ⭐ `CompanyAPI.refreshOnce`: chỉ một lần làm mới tại một thời điểm, các lệnh khác chờ kết quả rồi gọi lại. Làm mới thất bại (400/401/403) thì xoá token, báo `CompanyAPI.sessionExpired`, `AuthStore` về màn đăng nhập với thông báo "Hết phiên đăng nhập — vui lòng đăng nhập lại".
