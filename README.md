@@ -51,3 +51,13 @@ Không cần quét mã END CODE: khi có tracking chưa có thông tin, màn qu�
 ## Báo hư hỏng phiên công ty (26/10/2026)
 
 Nút "Hỏng" ở màn quét phiên công ty mở bảng Báo hư hỏng: loại hư hỏng (nhiều lựa chọn) → ảnh → Quyết định (Nhận hàng / Từ chối, nằm cuối) → Gửi. Mỗi kiện một báo cáo. Code: `CompanyDamageSheet` (`AutoScanView.swift`), `CompanyAPI.reportDamage` (`APIClient.swift`).
+
+## Xem lại ảnh label trong chi tiết kiện (27/10/2026)
+
+Màn "Chi tiết kiện" hiện hàng ảnh label đã chụp (lấy từ `labelPhotoUrls` của API công ty); chạm để xem toàn màn hình, chụm để phóng to. Kiện hư hỏng có thêm mục "Ảnh báo hư hỏng" riêng: giờ báo, loại hư hỏng, quyết định (Nhận hàng/Từ chối) và ảnh (lấy từ `GET /trackings/{id}/damage-report`).
+
+## Đổi ngôn ngữ Việt / Anh (27/10/2026)
+
+Mọi chữ hiển thị viết bằng `tr("câu tiếng Việt")` (câu có số dùng `{0}`, `{1}`); bản tiếng Anh nằm trong bảng `L10n.en` (`Localization.swift`). Chữ mới thiếu bản dịch sẽ hiện nguyên tiếng Việt. Đổi ngôn ngữ ở ⚙️ hoặc nút VI | EN ở màn đăng nhập. Chữ từ công ty (tên hãng, mặt hàng, lỗi của máy chủ) không dịch.
+
+**Giao diện sáng/tối:** ⚙️ Cài đặt → Giao diện: Theo hệ thống (mặc định) / Sáng / Tối, lưu bằng `@AppStorage("theme")`, áp dụng ở `WarehouseScannerApp.swift`. Màn đăng nhập và màn quét camera luôn nền tối.

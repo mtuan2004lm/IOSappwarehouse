@@ -56,13 +56,13 @@ struct LoginView: View {
 
     private var header: some View {
         VStack(spacing: 14) {
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 72, height: 72)
-                .background(Color.accent, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Image("LogoTina")
+                .resizable().scaledToFit()
+                .frame(width: 220)
+                .padding(.horizontal, 20).padding(.vertical, 14)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .accessibilityLabel("TiNa Shipping")
             VStack(spacing: 4) {
-                Text("TinaShipping").font(.title.bold())
                 Text(tr("Đăng nhập để bắt đầu nhận hàng")).font(.subheadline).foregroundStyle(.secondary)
             }
         }

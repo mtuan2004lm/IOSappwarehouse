@@ -268,7 +268,7 @@ final class AutoScanViewModel: ObservableObject {
         }
         noKhoMiss[code] = Date()
         cooldown[code] = Date().addingTimeInterval(1.5)       // đợi ~3 giây rồi mới đọc lại
-        last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Chưa đọc được mã kho — đưa tem vào lại (chưa gửi lên công ty)", noWarehouse: true)
+        last = LastResult(barcode: code, group: nil, warehouseText: nil, message: tr("Chưa đọc được mã kho — đưa tem vào lại (chưa gửi lên công ty)"), noWarehouse: true)
         Haptics.warning()
         AudioServicesPlaySystemSound(1053)
     }
@@ -317,7 +317,7 @@ final class AutoScanViewModel: ObservableObject {
                 coPending = []; pendingTracks = 0; endRequired = false
                 sent += 1
                 lastItem = companyItem(r.id, co, barcode: first, wh: wh, noName: true)
-                let note = "NO NAME · \(r.checkIn)" + (wh.isEmpty ? " · không có mã kho" : " · mã kho \(wh)")
+                let note = "NO NAME · \(r.checkIn)" + (wh.isEmpty ? tr(" · không có mã kho") : tr(" · mã kho {0}", wh))
                 entries.insert(ScanEntry(barcode: first, warehouseText: wh.isEmpty ? nil : wh, status: .noName, note: note), at: 0)
                 last = LastResult(barcode: first, group: nil, warehouseText: wh.isEmpty ? nil : wh, message: note, noName: true)
                 Haptics.warning(); AudioServicesPlaySystemSound(1103)
@@ -329,7 +329,7 @@ final class AutoScanViewModel: ObservableObject {
                 done.remove(code)
                 for x in extras { done.remove(x) }
                 endRequired = true; pendingTracks = 3
-                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Bắt buộc bấm nút END CODE", endBlocked: true)
+                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: tr("Bắt buộc bấm nút END CODE"), endBlocked: true)
                 Haptics.warning(); AudioServicesPlaySystemSound(1053)
                 return
             }
@@ -366,7 +366,7 @@ final class AutoScanViewModel: ObservableObject {
                 } else {
                     sent += 1
                     lastItem = companyItem(r.id, co, barcode: value, wh: customer, noName: r.matchStatus == "NO_NAME")
-                    let note = r.matchStatus + (usedPending > 0 ? " · +\(usedPending) mã phụ" : "") + (customer.isEmpty ? " · không có mã kho" : " · mã kho \(customer)")
+                    let note = r.matchStatus + (usedPending > 0 ? tr(" · +{0} mã phụ", usedPending) : "") + (customer.isEmpty ? tr(" · không có mã kho") : tr(" · mã kho {0}", customer))
                     entries.insert(ScanEntry(barcode: value, warehouseText: customer.isEmpty ? nil : customer, status: r.matchStatus == "NO_NAME" ? .noName : .sent, note: note), at: 0)
                     last = LastResult(barcode: value, group: nil, warehouseText: customer.isEmpty ? nil : customer, message: note, company: true)
                     Haptics.success(); AudioServicesPlaySystemSound(1057)
@@ -378,8 +378,8 @@ final class AutoScanViewModel: ObservableObject {
                 pendingTracks = seq
                 let needEnd = seq >= 3
                 if needEnd { endRequired = true }
-                let msg = needEnd ? "Đủ 3 tracking — bấm nút END CODE" : tr("Tracking {0}/3 chưa có thông tin", seq)
-                let tried = "Công ty không có mã này. Đã thử: " + cut.list.prefix(3).joined(separator: ", ")
+                let msg = needEnd ? tr("Đủ 3 tracking — bấm nút END CODE") : tr("Tracking {0}/3 chưa có thông tin", seq)
+                let tried = tr("Công ty không có mã này. Đã thử: ") + cut.list.prefix(3).joined(separator: ", ")
                 entries.insert(ScanEntry(barcode: cut.primary, warehouseText: customer.isEmpty ? nil : customer, status: .tracked, note: msg + " · " + tried), at: 0)
                 last = LastResult(barcode: cut.primary, group: nil, warehouseText: nil, message: tried, track: seq)
                 Haptics.warning(); AudioServicesPlaySystemSound(1103)

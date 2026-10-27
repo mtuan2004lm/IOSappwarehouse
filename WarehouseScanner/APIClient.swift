@@ -147,6 +147,7 @@ struct CompanyTracking: Decodable, Identifiable {
     let totalDamagedQuantity: Double?
     let checkedInAt: String?
     let labelPhotoCount: Int
+    let labelPhotoURLs: [String]      // link ảnh tem (https://…/uploads/trackings/<id>/label-….jpg)
     let orderItems: [CompanyOrderItem]
     let holdCases: [CompanyHoldCase]
     enum CodingKeys: String, CodingKey {
@@ -168,15 +169,23 @@ struct CompanyTracking: Decodable, Identifiable {
         totalActualQuantity = c.lenientDouble(.totalActualQuantity); totalDamagedQuantity = c.lenientDouble(.totalDamagedQuantity)
         checkedInAt = c.lenientString(.checkedInAt)
         let urls = (try? c.decodeIfPresent([String].self, forKey: .labelPhotoUrls)) ?? []
-        let photos = (try? c.decodeIfPresent([CompanyAnyJSON].self, forKey: .labelPhotos)) ?? []
+        let photos = (try? c.decodeIfPresent([CompanyPhotoRef].self, forKey: .labelPhotos)) ?? []
+        labelPhotoURLs = urls.isEmpty ? photos.compactMap { $0.url } : urls
         labelPhotoCount = max(urls.count, photos.count)
         orderItems = (try? c.decodeIfPresent([CompanyOrderItem].self, forKey: .orderItems)) ?? []
         holdCases = (try? c.decodeIfPresent([CompanyHoldCase].self, forKey: .holdCaseItems)) ?? []
     }
 }
 
-/// Chỉ để đếm phần tử của một mảng không rõ cấu trúc.
-struct CompanyAnyJSON: Decodable { init(from decoder: Decoder) throws {} }
+extension CompanyTracking {
+    /// "Kiện không xác định" theo cách web công ty tính: `matchStatus` NO_NAME VÀ chưa có dòng hàng khai báo.
+    /// (Kiện đã có `orderItems` vẫn có thể mang `matchStatus: NO_NAME` nhưng web coi là đã khớp danh sách.)
+    var hasOrderLines: Bool { !orderItems.isEmpty || (orderItemCount ?? 0) > 0 }   // `orderItemCount` luôn có, `orderItems` chỉ có khi gọi kèm include
+    var isUnknown: Bool { matchStatus == "NO_NAME" && !hasOrderLines }
+}
+
+/// Một ảnh trong `labelPhotos` của công ty: { id, url, originalFilename, mimeType, sizeBytes, createdAt }.
+struct CompanyPhotoRef: Decodable { let url: String? }
 
 
 /// Giá trị JSON bất kỳ, dùng để hiện nguyên văn phản hồi của lệnh kiểm tra (chưa biết hết cấu trúc).
@@ -348,14 +357,14 @@ actor CompanyAPI {
             KeychainStore.remove("accessToken")
             KeychainStore.remove("refreshToken")
             NotificationCenter.default.post(name: Self.sessionExpired, object: nil)
-            throw CompanyError(status: 401, code: "SESSION_EXPIRED", message: "Hết phiên đăng nhập — vui lòng đăng nhập lại")
+            throw CompanyError(status: 401, code: "SESSION_EXPIRED", message: tr("Hết phiên đăng nhập — vui lòng đăng nhập lại"))
         }
     }
 
     /// Làm mới token (refreshToken dùng một lần: mỗi lần làm mới nhận cặp token mới).
     private func refresh() async throws {
         guard let rt = KeychainStore.get("refreshToken") else {
-            throw CompanyError(status: 401, code: "NO_TOKEN", message: "Chưa đăng nhập công ty")
+            throw CompanyError(status: 401, code: "NO_TOKEN", message: tr("Chưa đăng nhập công ty"))
         }
         let r = try await request(CompanyEnvelope<CompanyTokens>.self, "POST", "/auth/refresh",
                                   json: ["refreshToken": rt], auth: false)
@@ -383,16 +392,29 @@ actor CompanyAPI {
 
     /// Chỉ đọc: kiện của một phiên (GET /trackings?receivingSessionId=). Trả về một trang.
     func trackings(sessionId: Int, page: Int, limit: Int = 30) async throws -> [CompanyTracking] {
-        try await request(CompanyList<CompanyTracking>.self, "GET", "/trackings",
-                          query: [URLQueryItem(name: "receivingSessionId", value: String(sessionId)),
-                                  URLQueryItem(name: "page", value: String(page)),
-                                  URLQueryItem(name: "limit", value: String(limit))]).data
+        let base = [URLQueryItem(name: "receivingSessionId", value: String(sessionId)),
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "limit", value: String(limit))]
+        // Web công ty gửi thêm include=orderItems,holdCaseItems để nhận kèm dòng hàng; nếu máy chủ từ chối thì gọi lại như cũ.
+        if let r = try? await request(CompanyList<CompanyTracking>.self, "GET", "/trackings",
+                                      query: base + [URLQueryItem(name: "include", value: "orderItems,holdCaseItems")]) { return r.data }
+        return try await request(CompanyList<CompanyTracking>.self, "GET", "/trackings", query: base).data
     }
 
     /// Chỉ đọc: chi tiết một kiện (GET /trackings/{id}).
     func tracking(id: String) async throws -> CompanyTracking {
         let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        if let r = try? await request(CompanyEnvelope<CompanyTracking>.self, "GET", "/trackings/\(enc)",
+                                      query: [URLQueryItem(name: "include", value: "orderItems,holdCaseItems")]) { return r.data }
         return try await request(CompanyEnvelope<CompanyTracking>.self, "GET", "/trackings/\(enc)").data
+    }
+
+    /// Chỉ đọc: báo cáo hư hỏng của một kiện (GET /trackings/{id}/damage-report) — đã xác minh bằng JSON thật 27/10/2026:
+    /// { id, decision, reportedAt, damageTypes:[{code,name}], photos:[{url,…}], photoUrls:[…] }.
+    func damageReport(trackingId: String) async throws -> CompanyDamageReport {
+        let enc = trackingId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trackingId
+        let raw = try await request(CompanyEnvelope<CompanyJSON>.self, "GET", "/trackings/\(enc)/damage-report").data
+        return CompanyDamageReport(json: raw)
     }
 
     /// Hỏi công ty "mã này đã có chưa" (POST /trackings/check-tracking-scan). Tên lệnh là "check" nên không tạo kiện.
@@ -453,10 +475,10 @@ actor CompanyAPI {
                                        multipart: [CompanyPart]? = nil,
                                        auth: Bool = true, retry: Bool = true) async throws -> T {
         guard var comps = URLComponents(string: baseURL + path) else {
-            throw CompanyError(status: 0, code: "BAD_URL", message: "Địa chỉ API không hợp lệ")
+            throw CompanyError(status: 0, code: "BAD_URL", message: tr("Địa chỉ API không hợp lệ"))
         }
         if !query.isEmpty { comps.queryItems = query }
-        guard let url = comps.url else { throw CompanyError(status: 0, code: "BAD_URL", message: "Địa chỉ API không hợp lệ") }
+        guard let url = comps.url else { throw CompanyError(status: 0, code: "BAD_URL", message: tr("Địa chỉ API không hợp lệ")) }
         var req = URLRequest(url: url, timeoutInterval: multipart == nil ? 15 : 90)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -483,7 +505,7 @@ actor CompanyAPI {
         var usedToken: String?
         if auth {
             guard let t = KeychainStore.get("accessToken") else {
-                throw CompanyError(status: 401, code: "NO_TOKEN", message: "Chưa đăng nhập công ty")
+                throw CompanyError(status: 401, code: "NO_TOKEN", message: tr("Chưa đăng nhập công ty"))
             }
             usedToken = t
             req.setValue("Bearer " + t, forHTTPHeaderField: "Authorization")
@@ -492,7 +514,7 @@ actor CompanyAPI {
         do {
             (data, resp) = try await URLSession.shared.data(for: req)
         } catch {
-            throw CompanyError(status: 0, code: "NETWORK", message: "Không kết nối được tới API công ty: \(error.localizedDescription)")
+            throw CompanyError(status: 0, code: "NETWORK", message: tr("Không kết nối được tới API công ty: {0}", error.localizedDescription))
         }
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401, auth, retry {
@@ -502,12 +524,59 @@ actor CompanyAPI {
         }
         guard (200..<300).contains(status) else {
             let e = try? JSONDecoder().decode(CompanyErrorBody.self, from: data)
-            throw CompanyError(status: status, code: e?.code, message: e?.message ?? "Lỗi API công ty")
+            throw CompanyError(status: status, code: e?.code, message: e?.message ?? tr("Lỗi API công ty"))
         }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            throw CompanyError(status: status, code: "DECODE", message: "Không đọc được phản hồi của API công ty: \(error.localizedDescription)")
+            throw CompanyError(status: status, code: "DECODE", message: tr("Không đọc được phản hồi của API công ty: {0}", error.localizedDescription))
         }
+    }
+}
+
+
+extension CompanyJSON {
+    /// Mọi chuỗi trông như link ảnh (…jpg/jpeg/png/webp/heic, hoặc nằm dưới /uploads/) trong JSON, không trùng lặp, đúng thứ tự.
+    /// Link bắt đầu bằng "/" được ghép với địa chỉ máy chủ công ty.
+    func imageURLs() -> [String] {
+        var out: [String] = []
+        func walk(_ j: CompanyJSON) {
+            switch j {
+            case .string(let t):
+                let low = t.lowercased()
+                let isImg = [".jpg", ".jpeg", ".png", ".webp", ".heic"].contains { low.contains($0) } || low.contains("/uploads/")
+                guard isImg, low.hasPrefix("http") || t.hasPrefix("/") else { return }
+                let full = t.hasPrefix("/") ? "https://apiwh-dev.tinashipping.com" + t : t
+                if !out.contains(full) { out.append(full) }
+            case .array(let a): a.forEach(walk)
+            case .object(let o): o.keys.sorted().forEach { walk(o[$0]!) }
+            default: break
+            }
+        }
+        walk(self)
+        return out
+    }
+}
+
+
+/// Báo cáo hư hỏng của một kiện (đọc từ JSON, chịu được trường thiếu).
+struct CompanyDamageReport {
+    let decision: String?          // RECEIVED | REJECTED
+    let reportedAt: String?
+    let typeNames: [String]
+    let photoURLs: [String]
+
+    init(json: CompanyJSON) {
+        decision = json["decision"]?.stringValue
+        reportedAt = json["reportedAt"]?.stringValue
+        var names: [String] = []
+        if case .array(let a)? = json["damageTypes"] {
+            names = a.compactMap { $0["name"]?.stringValue ?? $0["code"]?.stringValue }
+        }
+        typeNames = names
+        var urls: [String] = []
+        if case .array(let a)? = json["photoUrls"] { urls = a.compactMap { $0.stringValue } }
+        if urls.isEmpty, case .array(let a)? = json["photos"] { urls = a.compactMap { $0["url"]?.stringValue } }
+        photoURLs = urls.isEmpty ? json.imageURLs() : urls
     }
 }

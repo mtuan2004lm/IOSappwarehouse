@@ -68,7 +68,7 @@ struct AutoScanView: View {
                     Button { vm.endCode() } label: {
                         VStack(spacing: 2) {
                             Text("END CODE").font(.system(size: 24, weight: .heavy))
-                            Text(vm.pendingTracks >= 3 ? "Bắt buộc bấm để chốt (3/3)" : "Bấm để chốt kiện ({0}/3)".replacingOccurrences(of: "{0}", with: String(vm.pendingTracks)))
+                            Text(vm.pendingTracks >= 3 ? tr("Bắt buộc bấm để chốt (3/3)") : tr("Bấm để chốt kiện ({0}/3)", vm.pendingTracks))
                                 .font(.footnote.bold())
                         }
                         .frame(maxWidth: .infinity, minHeight: 64)
@@ -105,8 +105,8 @@ struct AutoScanView: View {
                 VStack {
                     VStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 34)).foregroundStyle(.yellow)
-                        Text("BẮT BUỘC BẤM END CODE").font(.title3.weight(.heavy)).multilineTextAlignment(.center)
-                        Text("Tem này đã quét đủ 3 tracking nhưng không có thông tin. Bấm nút END CODE bên dưới trước khi quét tem khác.")
+                        Text(tr("BẮT BUỘC BẤM END CODE")).font(.title3.weight(.heavy)).multilineTextAlignment(.center)
+                        Text(tr("Tem này đã quét đủ 3 tracking nhưng không có thông tin. Bấm nút END CODE bên dưới trước khi quét tem khác."))
                             .font(.footnote).multilineTextAlignment(.center).opacity(0.9)
                     }
                     .foregroundStyle(.white).padding(16)
@@ -119,6 +119,7 @@ struct AutoScanView: View {
 
             if camera.authorized == false { PermissionDenied() }
         }
+        .preferredColorScheme(.dark)      // màn camera luôn tối dù nhân viên chọn giao diện sáng
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { startScanning() }
@@ -246,8 +247,8 @@ struct AutoScanView: View {
             } else if r.noWarehouse {
                 card(bg: Color.orange) {
                     VStack(spacing: 4) {
-                        Text("THIẾU MÃ KHO").font(.system(size: 30, weight: .heavy))
-                        Text(r.message ?? "Đưa tem vào lại").font(.subheadline.bold()).multilineTextAlignment(.center)
+                        Text(tr("THIẾU MÃ KHO")).font(.system(size: 30, weight: .heavy))
+                        Text(r.message ?? tr("Đưa tem vào lại")).font(.subheadline.bold()).multilineTextAlignment(.center)
                         codeText(r.barcode)
                     }
                 }
@@ -263,8 +264,8 @@ struct AutoScanView: View {
             } else if r.endBlocked {
                 card(bg: Color.dupRed) {
                     VStack(spacing: 4) {
-                        Text("BẤM END CODE").font(.system(size: 30, weight: .heavy))
-                        Text(r.message ?? "Bắt buộc bấm nút END CODE").font(.subheadline.bold()).multilineTextAlignment(.center)
+                        Text(tr("BẤM END CODE")).font(.system(size: 30, weight: .heavy))
+                        Text(r.message ?? tr("Bắt buộc bấm nút END CODE")).font(.subheadline.bold()).multilineTextAlignment(.center)
                     }
                 }
             } else if r.duplicate {
@@ -335,7 +336,7 @@ struct AutoScanView: View {
 
     private func businessLabel(_ t: String?) -> String {
         switch t {
-        case "KINH_DOANH": return "Kinh doanh"
+        case "KINH_DOANH": return tr("Kinh doanh")
         case "KHONG_KINH_DOANH": return tr("Không kinh doanh")
         default: return "—"
         }
@@ -415,7 +416,7 @@ struct CompanyDamageSheet: View {
                     Text(item.barcode).font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
 
                     // 1. Loại hư hỏng (chọn được nhiều)
-                    Text("Loại hư hỏng").font(.headline)
+                    Text(tr("Loại hư hỏng")).font(.headline)
                     if loading { ProgressView() }
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         ForEach(types) { t in
@@ -438,9 +439,9 @@ struct CompanyDamageSheet: View {
 
                     // 2. Ảnh hư hỏng (tối đa 10)
                     HStack {
-                        Text("Ảnh hư hỏng").font(.headline)
+                        Text(tr("Ảnh hư hỏng")).font(.headline)
                         Spacer()
-                        Button { showPicker = true } label: { Label("Chụp ảnh", systemImage: "camera") }
+                        Button { showPicker = true } label: { Label(tr("Chụp ảnh"), systemImage: "camera") }
                             .buttonStyle(.bordered).disabled(photos.count >= 10)
                     }
                     if !photos.isEmpty {
@@ -458,42 +459,42 @@ struct CompanyDamageSheet: View {
                     }
 
                     // 3. Quyết định — luôn nằm cuối cùng
-                    Text("Quyết định").font(.headline)
-                    Picker("Quyết định", selection: $decision) {
-                        Text("Nhận hàng").tag("RECEIVED")
-                        Text("Từ chối").tag("REJECTED")
+                    Text(tr("Quyết định")).font(.headline)
+                    Picker(tr("Quyết định"), selection: $decision) {
+                        Text(tr("Nhận hàng")).tag("RECEIVED")
+                        Text(tr("Từ chối")).tag("REJECTED")
                     }
                     .pickerStyle(.segmented)
                     if decision == "REJECTED" {
-                        Text("Từ chối: kiện chuyển sang trả người bán. Kiện đã vào thùng thì công ty không cho từ chối.").font(.footnote).foregroundStyle(Color.accent)
+                        Text(tr("Từ chối: kiện chuyển sang trả người bán. Kiện đã vào thùng thì công ty không cho từ chối.")).font(.footnote).foregroundStyle(Color.accent)
                     }
 
                     if let error { Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent).font(.footnote) }
                     if done {
-                        Label("Đã gửi báo cáo hư hỏng", systemImage: "checkmark.circle.fill").foregroundStyle(Color.okGreen).font(.headline)
+                        Label(tr("Đã gửi báo cáo hư hỏng"), systemImage: "checkmark.circle.fill").foregroundStyle(Color.okGreen).font(.headline)
                     } else {
                         Button { confirm = true } label: {
-                            HStack { Spacer(); if saving { ProgressView() }; Text(saving ? "Đang gửi…" : "Gửi báo cáo").font(.headline); Spacer() }
+                            HStack { Spacer(); if saving { ProgressView() }; Text(saving ? tr("Đang gửi…") : tr("Gửi báo cáo")).font(.headline); Spacer() }
                                 .frame(minHeight: 50)
                         }
                         .buttonStyle(.borderedProminent).tint(.accent)
                         .disabled(saving || selected.isEmpty)
-                        if selected.isEmpty { Text("Chọn ít nhất một loại hư hỏng.").font(.footnote).foregroundStyle(.secondary) }
+                        if selected.isEmpty { Text(tr("Chọn ít nhất một loại hư hỏng.")).font(.footnote).foregroundStyle(.secondary) }
                     }
                 }
                 .padding(16)
             }
-            .navigationTitle("Báo hư hỏng")
+            .navigationTitle(tr("Báo hư hỏng"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(done ? "Đóng" : "Huỷ") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(done ? tr("Đóng") : tr("Huỷ")) { dismiss() } } }
             .task { await loadTypes() }
             .fullScreenCover(isPresented: $showPicker) {
                 PhotoPicker(onImage: { img in photos.append(img); showPicker = false }, onCancel: { showPicker = false }).ignoresSafeArea()
             }
-            .alert("Gửi báo cáo hư hỏng lên công ty?", isPresented: $confirm) {
-                Button("Huỷ", role: .cancel) {}
-                Button("Gửi") { Task { await send() } }
-            } message: { Text("Mỗi kiện chỉ có một báo cáo, gửi xong không sửa được từ app.") }
+            .alert(tr("Gửi báo cáo hư hỏng lên công ty?"), isPresented: $confirm) {
+                Button(tr("Huỷ"), role: .cancel) {}
+                Button(tr("Gửi")) { Task { await send() } }
+            } message: { Text(tr("Mỗi kiện chỉ có một báo cáo, gửi xong không sửa được từ app.")) }
         }
     }
 

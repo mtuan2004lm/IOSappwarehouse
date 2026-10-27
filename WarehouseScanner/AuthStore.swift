@@ -38,7 +38,12 @@ final class AuthStore: ObservableObject {
             isSignedIn = true
             Haptics.success()
         } catch {
-            errorMessage = error.localizedDescription
+            if let e = error as? CompanyError, [400, 401, 403].contains(e.status) {
+                // 401 = sai thông tin; 400 VALIDATION_FAILED = mật khẩu/tên không đúng định dạng (vd quá ngắn) nên cũng không thể là đúng
+                errorMessage = tr("Sai tên đăng nhập hoặc mật khẩu")
+            } else {
+                errorMessage = error.localizedDescription
+            }
             Haptics.error()
         }
     }

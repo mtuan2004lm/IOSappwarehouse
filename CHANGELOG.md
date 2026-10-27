@@ -9,6 +9,97 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-27 · ⭐ 🔥 📱 Chi tiết kiện: "Khớp đơn" hiện tên hàng như web (sửa lỗi vẫn báo NO_NAME)
+- Nguyên nhân: app gọi `GET /trackings` và `GET /trackings/{id}` KHÔNG kèm `include`, nên công ty không trả `orderItems` (chỉ trả `orderItemCount`); web gọi kèm `include=orderItems,holdCaseItems…`. Vì vậy app tưởng kiện chưa có dòng hàng và ghi thô "NO_NAME" (bản 14:12 của kiện TBA334169588754).
+- Sửa: cả danh sách và chi tiết kiện gọi kèm `include=orderItems,holdCaseItems`; nếu công ty từ chối tham số này thì tự gọi lại như cũ (không vỡ màn hình). Thêm `hasOrderLines` (dựa `orderItemCount` hoặc `orderItems`) dùng cho `isUnknown`.
+- Dòng "Khớp đơn" nay: "Khớp · Kem chống nắng Anessa Perfect UV 60ml (đơn 990001)"; mục "Hàng trong kiện" cũng hiện lại nhờ có `orderItems`.
+- Dòng "Khớp đơn" trình bày dọc (nhãn trên, giá trị dưới, chữ to và đậm hơn, tự xuống dòng) để đọc trọn tên hàng dài (`rowStacked`).
+- Chưa xác minh tên đúng của tham số include (web cắt chữ "holdCa…"); đã có phương án gọi lại.
+- Sửa `APIClient.swift`, `SessionsView.swift`, `Localization.swift`.
+
+### 2026-10-27 · ⭐ 📱 NO NAME theo đúng cách web tính (kiện đã có dòng hàng thì KHỚP)
+- Phát hiện từ JSON + ảnh web phiên 17: cả 6 kiện đều có `matchStatus: NO_NAME`, nhưng web chỉ gắn "Kiện không xác định" cho 4 kiện **chưa có `orderItems`**; kiện 322, 323 có dòng hàng khai báo nên web coi là khớp danh sách (kiện 323 chỉ gắn nhãn DAMAGED). App trước đó hiển thị thẳng `matchStatus` nên báo NO NAME sai so với web.
+- Thêm `CompanyTracking.isUnknown` = NO_NAME **và** không có dòng hàng. Danh sách kiện: nhãn NO NAME chỉ hiện khi `isUnknown`; thêm nhãn đỏ **HƯ HỎNG** cho kiện `condition == DAMAGED` (giống nhãn DAMAGED của web). Chi tiết kiện: "Khớp đơn" = Khớp nếu đã có dòng hàng.
+- Đổi tên hiển thị: danh sách + chi tiết kiện + kết quả kiểm tra mã ghi **"Kiện không xác định"** (EN "Unknown parcel") thay vì "NO NAME", đúng cách gọi của web. Thẻ NO NAME lúc quét (quy trình END CODE) giữ nguyên.
+- Không đổi màn quét tức thời (vẫn theo kết quả công ty trả lúc quét) và không đổi dữ liệu gửi đi.
+- ❓ Chưa rõ vì sao công ty để `matchStatus` NO_NAME cả khi đã liên kết dòng hàng; app chỉ đổi cách hiển thị cho khớp web.
+- Sửa `APIClient.swift`, `SessionsView.swift`, `Localization.swift`.
+
+### 2026-10-27 · ⭐ 📱 Chi tiết kiện: mục "Ảnh báo hư hỏng" (ảnh + loại + quyết định + giờ báo)
+- Kiện `condition == DAMAGED` hiện mục **Ảnh báo hư hỏng**, tách riêng khỏi **Ảnh label đã chụp** (như web: tab "Ảnh tem" và tab "Hư hỏng").
+- Gồm: **Đã báo lúc**, **Loại hư hỏng** (tên công ty, vd "Seal broken / Rách seal"), **Quyết định** (Nhận hàng / Từ chối), hàng ảnh (chạm xem lớn, phóng to).
+- Endpoint `GET /trackings/{id}/damage-report` (chỉ đọc) — ĐÃ xác minh bằng JSON thật kiện 323: `{decision, reportedAt, damageTypes[{code,name}], photos[…], photoUrls[…]}`. Bỏ phần dò JSON thô tạm.
+- Sửa `APIClient.swift` (`damageReport`, `CompanyDamageReport`), `SessionsView.swift`, `Localization.swift`.
+- ❗ Đọc báo cáo công ty chỉ có 1 báo cáo mỗi kiện; ảnh gửi lại sẽ THAY toàn bộ ảnh cũ (web nhắc) — app chỉ đọc, không đụng.
+
+### 2026-10-27 · ⭐ 📱 Chi tiết kiện: xem lại ảnh label đã chụp
+- Màn "Chi tiết kiện" có mục **Ảnh label đã chụp**: hàng ảnh nhỏ cuộn ngang; chạm vào → xem toàn màn hình, vuốt ngang đổi ảnh, chụm 2 ngón phóng to (tối đa 6 lần), chạm đúp về cỡ gốc, nút X đóng.
+- Dữ liệu: API danh sách/chi tiết kiện đã trả `labelPhotoUrls` (link đầy đủ `https://apiwh-dev…/uploads/trackings/<id>/label-….jpg`) và `labelPhotos[{id,url,…}]` (xác nhận từ JSON thật phiên 17, 26–27/10). App đọc `labelPhotoUrls`, thiếu thì lấy `labelPhotos[].url`; hiển thị bằng `AsyncImage`.
+- Sửa `APIClient.swift` (thêm `labelPhotoURLs`, `CompanyPhotoRef` thay `CompanyAnyJSON`), `SessionsView.swift` (mục ảnh + `RemotePhoto`/`PhotoViewer`/`ZoomablePhoto`, không thêm file mới), `Localization.swift` (2 chuỗi).
+- 🧪 Cần thử trên iPhone: kiện `TBA334169588754` (id 323, 1 ảnh), `383433054030` (id 321, 2 ảnh). Nếu ảnh không hiện (biểu tượng cảnh báo) có thể link `/uploads` cần đăng nhập → đổi sang tải kèm token.
+- ❓ Ảnh **hư hỏng** chưa làm: JSON danh sách kiện KHÔNG có ảnh hư hỏng (kiện 323 `condition: DAMAGED` nhưng không có trường ảnh) nên cần biết endpoint riêng mà web gọi khi mở tab Hư hỏng.
+
+### 2026-10-27 · 📱 Đăng nhập sai: báo "Sai tên đăng nhập hoặc mật khẩu"
+- Trước: hiện lỗi kỹ thuật "Invalid credentials (HTTP 401, UNAUTHORIZED)". Nay: lỗi 400/401/403 khi đăng nhập → "Sai tên đăng nhập hoặc mật khẩu" (EN "Incorrect username or password"). Lỗi mạng/máy chủ khác vẫn hiện nguyên nhân thật.
+- Cố ý gộp chung tên đăng nhập và mật khẩu (không nói rõ sai cái nào) vì API chỉ trả 401 chung và để không lộ tên nào tồn tại. Sửa `AuthStore.swift`, `Localization.swift`.
+- Bổ sung: nhập mật khẩu ngắn/lạ (vd `hâhhaaa`, 7 ký tự có dấu) API trả **400 VALIDATION_FAILED** thay vì 401 nên trước đó vẫn hiện lỗi kỹ thuật; nay 400 cũng báo cùng câu. Chưa xác minh quy tắc chính xác của API (có thể mật khẩu tối thiểu 8 ký tự).
+
+### 2026-10-27 · 📱 Bỏ nút "Tạo phiên mới" cuối danh sách (đã có dấu +)
+- Danh sách "Phiên đang mở" không còn nút "Tạo phiên mới" ở cuối; tạo phiên bằng dấu + trên thanh trên cùng (nhãn trợ năng "Tạo phiên mới").
+- Hộp xác nhận "Tạo phiên trên công ty?" → "Tạo phiên?" (EN "Create a session?"). Sửa `SessionsView.swift`, `Localization.swift`.
+
+### 2026-10-27 · 📱 Màn chính: tiêu đề "Phiên đang mở"
+- "Phiên đang mở trên công ty" → "Phiên đang mở" (EN: "Open sessions"). Sửa `SessionsView.swift`, `Localization.swift`.
+
+### 2026-10-27 · 📱 Màn tạo phiên: bỏ chữ "thử"
+- Tiêu đề và nút "Tạo phiên thử" → "Tạo phiên" (EN: "Create session"). Sửa `SessionsView.swift`, `Localization.swift`. Dòng chú thích bên dưới (tạo phiên THẬT, không xoá được) giữ nguyên.
+
+### 2026-10-27 · 📱 Cài đặt: tiêu đề mục ngôn ngữ đổi theo ngôn ngữ
+- Trước: luôn "Ngôn ngữ / Language". Nay: tiếng Việt → "Ngôn ngữ", English → "Language" (`tr("Ngôn ngữ")` + 1 chuỗi EN). Sửa `SettingsView.swift`, `Localization.swift`.
+- Màn đăng nhập vẫn có nút VI | EN riêng, không đổi.
+
+### 2026-10-27 · 📱 Đổi tên app thành "Warehouse Tina"
+- Tên dưới icon: `INFOPLIST_KEY_CFBundleDisplayName` (2 chỗ trong `project.pbxproj`) và `project.yml`: "Kho Scanner" → "Warehouse Tina".
+- Đổi chữ hướng dẫn quyền camera ("Cài đặt > Warehouse Tina > bật Camera", VI + EN) và tiêu đề `README.md`.
+- 📱 Cần build lại và cài đè app để tên mới hiện trên màn hình chính.
+
+### 2026-10-27 · 📱 Danh sách phiên: chữ to hơn
+- Màn "Phiên đang mở trên công ty": số phiên title3, tên hãng headline, dòng cửa/tài xế/ngày xe đến subheadline (trước caption), số đếm 6/23 title2. Chữ tự to theo cỡ chữ iOS của máy.
+- Sửa `SessionsView.swift`.
+
+### 2026-10-27 · 📱 Danh sách kiện: mã tracking dài hiển thị đủ trên 1 dòng
+- Trước: mã dài (vd 32 số, USPS 420…) bị cắt "…" vì chung dòng với nhãn NO NAME.
+- Nay: mã tracking ở dòng riêng ăn hết chiều ngang, tự thu nhỏ chữ (tối đa 50%) để vừa 1 dòng; nhãn NO NAME chuyển xuống dòng thông tin.
+- Sửa `SessionsView.swift` (danh sách kiện trong phiên). Màn chi tiết kiện vẫn xuống dòng để hiện đủ mã.
+- 🧪 Thử trên iPhone với mã 32 số; nếu chữ quá nhỏ khó đọc thì cho phép mã xuống 2 dòng.
+
+### 2026-10-27 · ⭐ 📱 Nhân viên tự chọn giao diện Sáng / Tối / Theo hệ thống
+- Cài đặt → **Giao diện** (mặc định Theo hệ thống). Trước đây app ép nền tối cố định.
+- Lưu `@AppStorage("theme")` (system|light|dark); áp dụng `preferredColorScheme` ở `WarehouseScannerApp.swift`.
+- Màn đăng nhập và màn quét camera giữ nền tối cố định (thiết kế nền tối, chữ trắng trên camera).
+- Thêm 5 chuỗi VI/EN vào `Localization.swift`. Không thêm file Swift mới.
+- 🧪 Cần thử trên iPhone: đổi 3 chế độ, kiểm tra danh sách phiên, chi tiết kiện, Cài đặt ở chế độ Sáng (chữ/màu cam, đỏ, xanh còn dễ đọc).
+
+### 2026-10-27 · 📱 Đổi icon app thành logo TiNa (TN)
+- Icon 1024×1024 dựng từ phần biểu tượng TN (máy bay + chữ TN) của logo, nền trắng, căn giữa, chừa lề cho góc bo iOS.
+- Thêm `Assets.xcassets/AppIcon.appiconset` (AppIcon.png + Contents.json); đặt `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` trong `project.pbxproj` và `project.yml`.
+- Lưu ý: logo gốc chỉ 216×50 px nên icon hơi mềm khi phóng to; có file ≥1024 px/SVG sẽ làm lại nét hơn.
+
+### 2026-10-27 · 📱 Logo TiNa Shipping ở màn đăng nhập
+- ⭐ Màn đăng nhập hiện logo TiNa Shipping (đặt trong khung trắng bo góc vì chữ "TiNa" màu xanh đậm, khó đọc trên nền tối) thay cho hình hộp và chữ "TinaShipping". File: `LoginView.swift`.
+- 🔥 Dự án trước đây **chưa có thư mục hình ảnh**: thêm `WarehouseScanner/Assets.xcassets` (`LogoTina.imageset`, ảnh 648×150 = bản 216×50 phóng 3 lần, đặt ở ô @3x) và khai báo trong `WarehouseScanner.xcodeproj/project.pbxproj` (tham chiếu thư mục + mục Resources). Chạy `xcodegen generate` vẫn tự nhận thư mục này.
+- Logo gốc chỉ 216×50 pixel nên đủ cho màn đăng nhập nhưng chưa đủ làm icon app (cần 1024×1024). Khi có file lớn hơn: thêm `AppIcon.appiconset` vào cùng `Assets.xcassets`. Chưa build Xcode.
+
+### 2026-10-27 · 📱 Bỏ dòng "Bản app" khỏi Cài đặt
+- Xoá mục "Bản app" trong `SettingsView.swift`, hằng `AppStore.buildTag` và bản dịch "Bản app" trong `L10n.en` (không còn dùng). Muốn biết iPhone đang chạy bản nào thì xem mục mới nhất của file này. Chưa build Xcode.
+
+### 2026-10-27 · ⭐ 📱 Chuyển ngôn ngữ Việt/Anh cho toàn bộ giao diện
+- ⭐ Trước đây ~120 câu (màn chi tiết phiên/kiện, tạo phiên, báo hư hỏng, END CODE, THIẾU MÃ KHO, thông báo lỗi API, trạng thái kiện…) viết thẳng tiếng Việt nên đổi sang English không đổi. Nay mọi chữ hiển thị đều qua `tr("…")` (`APIClient`, `AutoScanView`, `AutoScanViewModel`, `SessionsView`, `SettingsView`), câu có số/tên dùng `{0}`, `{1}`.
+- `Localization.swift` (`L10n.en`): thêm 113 bản dịch, xoá 60 câu cũ không còn dùng (server cũ, quét QR END CODE, kết thúc phiên…). Hiện 163 câu, đã kiểm tra: không trùng khoá, mọi `tr("…")` trong code đều có bản dịch.
+- Đổi ngôn ngữ ở ⚙️ → Ngôn ngữ / Language, hoặc nút VI | EN ở màn đăng nhập. Chữ do công ty trả về (tên hãng, tên mặt hàng, thông báo lỗi của máy chủ) không dịch.
+- 🔥 Chưa làm: quyền camera/ảnh trong `Info.plist` (vẫn tiếng Việt, cần `InfoPlist.strings` + sửa project); `AppStore.buildTag` giữ tiếng Việt. Khi thêm chữ mới: viết `tr("câu tiếng Việt")` rồi thêm một dòng vào `L10n.en`.
+- Chưa build Xcode. Thử: Cài đặt → English, duyệt các màn (phiên, kiện, tạo phiên, quét, báo hư hỏng).
+
 ### 2026-10-26 · ⭐ 📱 DOFA168 bị OCR đọc sai số 8 → nhầm sang FADO.VN
 - ⭐ Kiện `300470092728` ghi mã kho `SG HUE DOFA16&.` (đúng ra là `SG HUE_DOFA168`, nhóm FADO 168). Chữ "168" bị đọc sai và dòng bắt đầu bằng "SG HUE DOFA" nên rơi vào quy tắc FADO.VN (kinh doanh).
 - `RuleMatcher.normalizeOCR`: dòng bắt đầu `SG HUE` / `SG FRAGILE` + `DOFA` + `16…` (bất kỳ ký tự nào sau "16", có/không dấu cách hoặc `_`) → chuẩn hoá thành `SG HUE_DOFA168` / `SG FRAGILE_DOFA168`. Dòng `SG HUE DOFA` không có "16" vẫn là FADO.VN. Đã thử 8 chuỗi mẫu.

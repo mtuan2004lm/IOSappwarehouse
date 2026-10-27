@@ -46,7 +46,7 @@ struct PermissionDenied: View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
             Text(tr("Chưa có quyền dùng camera")).font(.headline)
-            Text(tr("Vào Cài đặt > Kho Scanner > bật Camera.")).font(.footnote).multilineTextAlignment(.center)
+            Text(tr("Vào Cài đặt > Warehouse Tina > bật Camera.")).font(.footnote).multilineTextAlignment(.center)
             Button(tr("Mở Cài đặt")) { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
                 .buttonStyle(.borderedProminent)
         }

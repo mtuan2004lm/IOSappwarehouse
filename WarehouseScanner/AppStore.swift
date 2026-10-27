@@ -7,9 +7,6 @@ final class AppStore: ObservableObject {
     @Published private(set) var rules: [WarehouseRule] = []
     @Published private(set) var matcher = RuleMatcher(rules: [])
 
-    /// Dấu bản build, hiện trong ⚙️ để biết iPhone đang chạy bản nào (đổi mỗi lần sửa logic quét).
-    static let buildTag = "2026-10-26 · chỉ dùng hệ thống công ty"
-
     init() {
         // Quy tắc mã kho cài sẵn trong app (từ 26/10/2026), không tải từ server nào.
         let r = WarehouseRule.builtIn
