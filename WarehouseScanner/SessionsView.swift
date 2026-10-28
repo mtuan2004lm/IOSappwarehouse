@@ -10,20 +10,32 @@ struct SessionsView: View {
     @State private var coLoading = false
     @State private var coCarriers: [Int: String] = [:]      // id hãng → tên hãng (API danh sách phiên chỉ trả id hãng)
     @State private var showCoNew = false
-    @AppStorage("company.selectedSessionId") private var coSelectedId = 0
-    @AppStorage("company.selectedSessionLabel") private var coSelectedLabel = ""
+    // Bộ lọc giống web: hãng · trạng thái · cửa · giờ xe đến
+    @State private var fCarrier = 0               // 0 = tất cả
+    @State private var fStatus = ""               // "" = tất cả · OPEN · CLOSED
+    @State private var fGate = ""                 // "" = tất cả
+    @State private var loadToken = UUID()         // chỉ nhận kết quả của lần tải mới nhất (đổi nhiều bộ lọc cùng lúc, vd "Xoá lọc", sẽ gọi API nhiều lần)
+    @State private var knownGates: Set<String> = []   // các cửa đã thấy (lọc theo cửa thì danh sách trả về chỉ còn một cửa, nên nhớ lại để vẫn chọn được cửa khác)
+    @State private var fFrom: Date?
+    @State private var fTo: Date?
+    @State private var showDates = false
 
     var body: some View {
         List {
+            Section {
+                filterBar
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowBackground(Color.clear)
+            }
             Section {
                 if !CompanyAPI.shared.isSignedIn {
                     Text(tr("Chưa đăng nhập công ty.")).foregroundStyle(.secondary)
                 } else if let coError {
                     Label(coError, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent)
-                } else if coSessions.isEmpty && !coLoading {
-                    Text(tr("Công ty chưa có phiên nào đang mở.")).foregroundStyle(.secondary)
+                } else if shown.isEmpty && !coLoading {
+                    Text(tr("Không có phiên nào phù hợp.")).foregroundStyle(.secondary)
                 }
-                ForEach(coSessions, id: \.id) { s in
+                ForEach(shown, id: \.id) { s in
                     NavigationLink {
                         CompanyTrackingsView(session: s, carrierName: coCarrierName(s))
                     } label: {
@@ -31,19 +43,17 @@ struct SessionsView: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack {
                                     Text("#\(s.id)").font(.title3.bold())
-                                    Text(coCarrierName(s)).font(.headline).foregroundStyle(Color.accent)
+                                    CarrierLogo(name: coCarrierName(s), code: s.carrier?.code)
                                 }
-                                Text(coDetail(s)).font(.subheadline).foregroundStyle(.secondary)
-                                Text(coExtra(s)).font(.subheadline).foregroundStyle(.secondary)
+                                coInfoRows(s)
                             }
                             Spacer()
-                            Text(coCount(s)).font(.title2.monospacedDigit().bold())
-                            if coSelectedId == s.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.okGreen) }
+                            Text(coCount(s)).font(.system(size: 30, weight: .heavy).monospacedDigit())
+                                .foregroundStyle(coCountColor(s)).lineLimit(1).minimumScaleFactor(0.6).layoutPriority(1)
                         }
                     }
                 }
-            } header: { Text(tr("Phiên đang mở")) }
-              footer: { Text(coSelectedId > 0 ? tr("Đang chọn {0}. Chạm phiên để xem kiện và quét.", coSelectedLabel) : tr("Chạm một phiên để xem các kiện đã quét và bắt đầu quét.")) }
+            }
 
         }
         .overlay { if coLoading && coSessions.isEmpty { ProgressView() } }
@@ -57,6 +67,12 @@ struct SessionsView: View {
         .sheet(isPresented: $showCoNew, onDismiss: { Task { await loadCompany() } }) {
             NavigationStack { CompanyNewSessionView(carriers: coCarriers) }
         }
+        .sheet(isPresented: $showDates) { DateRangeSheet(from: $fFrom, to: $fTo) }
+        .onChange(of: fStatus) { _ in Task { await loadCompany() } }
+        .onChange(of: fCarrier) { _ in Task { await loadCompany() } }
+        .onChange(of: fGate) { _ in Task { await loadCompany() } }
+        .onChange(of: fFrom) { _ in Task { await loadCompany() } }
+        .onChange(of: fTo) { _ in Task { await loadCompany() } }
         .onAppear { Task { await loadCompany() } }      // mỗi lần quay lại màn này (vd. sau khi kết thúc phiên) tải lại danh sách
         .refreshable { await loadCompany() }
     }
@@ -68,26 +84,105 @@ struct SessionsView: View {
         return tr("hãng {0}", s.carrierId)
     }
 
-    /// Dòng mô tả một phiên công ty: cửa · người giao · biển số · loại xe.
-    private func coDetail(_ s: CompanySession) -> String {
-        var parts: [String] = []
-        if let gate = s.dockGate, !gate.isEmpty { parts.append(tr("cửa {0}", gate)) }
-        if let driver = s.driverName, !driver.isEmpty { parts.append(driver) }
-        if let plate = s.licensePlate, !plate.isEmpty { parts.append(plate) }
-        if let type = s.vehicleType, !type.isEmpty { parts.append(type) }
-        return parts.joined(separator: " · ")
+    /// Mỗi thông tin một dòng, có icon: cửa · người giao · xe (biển số, loại xe) · giờ xe đến · trạm · người mở phiên.
+    @ViewBuilder
+    private func coInfoRows(_ s: CompanySession) -> some View {
+        let vehicle = [s.licensePlate, s.vehicleType].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        let name: String? = s.user.map { u in (u.fullName ?? "").isEmpty ? u.username : (u.fullName ?? u.username) }
+        VStack(alignment: .leading, spacing: 3) {
+            if let gate = s.dockGate, !gate.isEmpty { infoRow("door.left.hand.closed", gate) }
+            if let driver = s.driverName, !driver.isEmpty { infoRow("steeringwheel", driver) }
+            if !vehicle.isEmpty { infoRow("box.truck", vehicle) }
+            if let t = coTime(s.vehicleArrivedAt) { infoRow("clock", t) }
+            if let station = s.station?.code, !station.isEmpty { infoRow("building.2", station) }
+            if let name, !name.isEmpty { infoRow("person.crop.circle", tr("mở bởi ") + name) }
+        }
     }
 
-    /// Dòng phụ: trạm · giờ xe đến · người mở phiên.
-    private func coExtra(_ s: CompanySession) -> String {
-        var parts: [String] = []
-        if let station = s.station?.code, !station.isEmpty { parts.append(station) }
-        if let t = coTime(s.vehicleArrivedAt) { parts.append(tr("xe đến ") + t) }
-        if let u = s.user {
-            let name = (u.fullName ?? "").isEmpty ? u.username : (u.fullName ?? u.username)
-            parts.append(tr("mở bởi ") + name)
+    private func infoRow(_ icon: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: icon).frame(width: 18)
+            Text(text)
         }
-        return parts.joined(separator: " · ")
+        .font(.subheadline).foregroundStyle(.secondary)
+    }
+
+    /// Xanh khi đã đủ kiện (đã quét ≥ hãng khai), vàng khi còn thiếu.
+    private func coCountColor(_ s: CompanySession) -> Color {
+        guard let reported = s.carrierReportedCount else { return .primary }
+        return (s.actualScannedCount ?? 0) >= reported ? Color.okGreen : Color.yellow
+    }
+
+    // MARK: Bộ lọc (giống web)
+
+    private var coGates: [String] {
+        var set = knownGates
+        if !fGate.isEmpty { set.insert(fGate) }
+        return set.sorted()
+    }
+
+    /// Cả 4 bộ lọc (hãng, trạng thái, cửa, giờ xe đến) đều gọi API; danh sách hiện đúng như máy chủ trả về.
+    private var shown: [CompanySession] { coSessions }
+
+    private var filterActive: Bool { fCarrier != 0 || !fStatus.isEmpty || !fGate.isEmpty || fFrom != nil || fTo != nil }
+
+    private func chip(_ title: String, _ value: String, active: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(title).foregroundStyle(.secondary)
+            Text(value).fontWeight(.semibold).lineLimit(1)
+            Image(systemName: "chevron.down").font(.caption2.bold()).foregroundStyle(.secondary)
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(active ? Color.accent.opacity(0.25) : Color(.secondarySystemFill), in: Capsule())
+        .foregroundStyle(.primary)
+    }
+
+    private var dateChipValue: String {
+        let f = DateFormatter(); f.dateFormat = "dd/MM"
+        switch (fFrom, fTo) {
+        case (nil, nil): return tr("Tất cả")
+        case (let a?, nil): return f.string(from: a) + " →"
+        case (nil, let b?): return "→ " + f.string(from: b)
+        case (let a?, let b?): return f.string(from: a) + " → " + f.string(from: b)
+        }
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Menu {
+                    Picker(tr("Hãng"), selection: $fCarrier) {
+                        Text(tr("Tất cả")).tag(0)
+                        ForEach(coCarriers.sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }, id: \.key) { Text($0.value).tag($0.key) }
+                    }
+                } label: { chip(tr("Hãng"), fCarrier == 0 ? tr("Tất cả") : (coCarriers[fCarrier] ?? "#\(fCarrier)"), active: fCarrier != 0) }
+
+                Menu {
+                    Picker(tr("Trạng thái"), selection: $fStatus) {
+                        Text(tr("Tất cả")).tag("")
+                        Text(tr("Đang mở")).tag("OPEN")
+                        Text(tr("Đã đóng")).tag("CLOSED")
+                    }
+                } label: { chip(tr("Trạng thái"), fStatus.isEmpty ? tr("Tất cả") : (fStatus == "OPEN" ? tr("Đang mở") : tr("Đã đóng")), active: !fStatus.isEmpty) }
+
+                Menu {
+                    Picker(tr("Cửa"), selection: $fGate) {
+                        Text(tr("Tất cả")).tag("")
+                        ForEach(coGates, id: \.self) { Text($0).tag($0) }
+                    }
+                } label: { chip(tr("Cửa"), fGate.isEmpty ? tr("Tất cả") : fGate, active: !fGate.isEmpty) }
+
+                Button { showDates = true } label: { chip(tr("Giờ xe đến"), dateChipValue, active: fFrom != nil || fTo != nil) }
+
+                if filterActive {
+                    Button(role: .destructive) {
+                        fCarrier = 0; fStatus = ""; fGate = ""; fFrom = nil; fTo = nil
+                    } label: { Text(tr("Xoá lọc")).font(.subheadline.weight(.semibold)).padding(.horizontal, 8).padding(.vertical, 8) }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
     }
 
     /// "đã quét / hãng khai" giống web (vd 6 / 20).
@@ -97,32 +192,48 @@ struct SessionsView: View {
         return "\(scanned) / \(reported)"
     }
 
-    /// Đổi chuỗi giờ ISO của API sang giờ máy: dd/MM HH:mm.
-    private func coTime(_ iso: String?) -> String? {
+    private func coDate(_ iso: String?) -> Date? {
         guard let iso, !iso.isEmpty else { return nil }
         let withMs = ISO8601DateFormatter()
         withMs.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
-        guard let d = withMs.date(from: iso) ?? plain.date(from: iso) else { return iso }
+        return withMs.date(from: iso) ?? plain.date(from: iso)
+    }
+
+    /// Đổi chuỗi giờ ISO của API sang giờ máy: dd/MM HH:mm.
+    private func coTime(_ iso: String?) -> String? {
+        guard let iso, !iso.isEmpty else { return nil }
+        guard let d = coDate(iso) else { return iso }
         let out = DateFormatter()
         out.dateFormat = "dd/MM HH:mm"
         return out.string(from: d)
     }
 
-    /// GET receiving-sessions?status=OPEN.
+    /// GET receiving-sessions (lọc theo hãng và trạng thái đang chọn).
     private func loadCompany() async {
         guard CompanyAPI.shared.isSignedIn else { coSessions = []; coError = nil; return }
+        let token = UUID()
+        loadToken = token
         coLoading = true
-        defer { coLoading = false }
+        defer { if loadToken == token { coLoading = false } }
         do {
             if coCarriers.isEmpty, let cs = try? await CompanyAPI.shared.carriers() {
                 coCarriers = Dictionary(cs.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
             }
-            let list = try await CompanyAPI.shared.openSessions()
+            let cal = Calendar.current
+            let from = fFrom.map { cal.startOfDay(for: $0) }                                   // 00:00 ngày bắt đầu
+            let to = fTo.flatMap { cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: $0))?.addingTimeInterval(-1) }   // 23:59:59 ngày kết thúc
+            let list = try await CompanyAPI.shared.sessions(status: fStatus.isEmpty ? nil : fStatus,
+                                                            carrierId: fCarrier == 0 ? nil : fCarrier,
+                                                            dockGate: fGate.isEmpty ? nil : fGate,
+                                                            arrivedFrom: from, arrivedTo: to)
+            guard loadToken == token else { return }
+            knownGates.formUnion(list.compactMap { $0.dockGate }.filter { !$0.isEmpty })
             coSessions = list.sorted { $0.id > $1.id }
             coError = nil
         } catch {
+            guard loadToken == token else { return }
             if let e = error as? CompanyError, e.status == 401 { auth.signOut(); return }   // hết hạn đăng nhập → về màn đăng nhập
             coError = error.localizedDescription
         }
@@ -172,8 +283,7 @@ private func coStatusText(_ s: String?) -> String {
 struct CompanyTrackingsView: View {
     let session: CompanySession
     let carrierName: String
-    @AppStorage("company.selectedSessionId") private var coSelectedId = 0
-    @AppStorage("company.selectedSessionLabel") private var coSelectedLabel = ""
+    @State private var live: CompanySession?       // bản mới nhất của phiên (số đã quét cập nhật khi quay lại màn này)
     @State private var items: [CompanyTracking] = []
     @State private var page = 1
     @State private var hasMore = true
@@ -181,8 +291,7 @@ struct CompanyTrackingsView: View {
     @State private var error: String?
     @State private var checkCode = ""
     @State private var checking = false
-    @State private var checkStatus: String?
-    @State private var checkDetail = ""
+    @State private var checkFound: Bool?           // nil = chưa kiểm tra; true = đã có trong danh sách đã quét
     @State private var checkError: String?
     @State private var confirmClose = false        // hỏi xác nhận trước khi đóng phiên trên công ty
     @State private var closing = false
@@ -191,51 +300,57 @@ struct CompanyTrackingsView: View {
     @Environment(\.dismiss) private var dismiss
     private let pageSize = 30
 
+    private var current: CompanySession { live ?? session }
+
+    /// Số thứ tự của kiện theo lúc quét: máy chủ trả kiện quét đầu tiên ở trên cùng (sort=checkedInAt, order=asc), nên số = vị trí dòng.
+    private func rowNumber(_ index: Int) -> Int { index + 1 }
+
+    /// Xanh khi đã đủ kiện (đã quét ≥ hãng khai), vàng khi còn thiếu.
+    private var countColor: Color {
+        guard let reported = current.carrierReportedCount else { return .primary }
+        return (current.actualScannedCount ?? 0) >= reported ? Color.okGreen : Color.yellow
+    }
+
     var body: some View {
         List {
+            // Đã quét / hãng khai: to, canh giữa, không ghi chú thêm
             Section {
-                Button {
-                    coSelectedId = session.id
-                    coSelectedLabel = "#\(session.id) " + carrierName
-                    Haptics.tick()
-                } label: {
-                    HStack {
-                        Image(systemName: coSelectedId == session.id ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(coSelectedId == session.id ? Color.okGreen : .secondary)
-                        Text(coSelectedId == session.id ? tr("Đang dùng phiên này") : tr("Chọn dùng phiên này"))
-                    }
+                VStack(spacing: 10) {
+                    CarrierLogo(name: carrierName, code: session.carrier?.code, height: 34)
+                    Text("\(current.actualScannedCount ?? 0) / " + (current.carrierReportedCount.map(String.init) ?? "—"))
+                        .font(.system(size: 52, weight: .heavy).monospacedDigit())
+                        .foregroundStyle(countColor)
+                        .lineLimit(1).minimumScaleFactor(0.5)
                 }
-                HStack {
-                    Text(tr("Đã quét / hãng khai")).foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(session.actualScannedCount ?? 0) / " + (session.carrierReportedCount.map(String.init) ?? "—")).monospacedDigit().bold()
-                }
-            } footer: { Text(tr("Chỉ xem. Chưa ghi gì lên công ty.")) }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 8)
+            }
 
+            // Một ô quét/gõ mã: có trong danh sách đã quét thì báo
             Section {
                 TextField(tr("Gõ hoặc dán mã tracking"), text: $checkCode)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .font(.body.monospaced())
-                Button {
-                    Task { await runCheck() }
-                } label: {
-                    HStack {
-                        Text(tr("Kiểm tra mã (không ghi)"))
-                        if checking { Spacer(); ProgressView() }
+                    .submitLabel(.search)
+                    .onSubmit { Task { await runCheck() } }
+                    .onChange(of: checkCode) { _ in checkFound = nil; checkError = nil }
+                if checking {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                } else if let checkError {
+                    Label(checkError, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent)
+                } else if let checkFound {
+                    if checkFound {
+                        Label(tr("Đã có trong danh sách đã quét"), systemImage: "checkmark.circle.fill")
+                            .font(.headline).foregroundStyle(Color.okGreen)
+                    } else {
+                        Label(tr("Chưa có trong danh sách đã quét"), systemImage: "xmark.circle")
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .disabled(checking || checkCode.trimmingCharacters(in: .whitespaces).isEmpty)
-                if let checkError {
-                    Label(checkError, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent)
-                } else if let checkStatus {
-                    Text(checkStatusText(checkStatus)).font(.headline)
-                    if !checkDetail.isEmpty { Text(checkDetail).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled) }
-                }
-            } header: { Text(tr("Kiểm tra mã với công ty")) }
-              footer: { Text(tr("Chỉ hỏi công ty mã này đã có chưa, không tạo kiện.")) }
+            }
 
-            if session.status == "OPEN" && !closedNow {
+            if current.status == "OPEN" && !closedNow {
                 Section {
                     NavigationLink {
                         AutoScanView(session: ReceivingSession(id: session.id, carrierName: carrierName, driverName: session.driverName,
@@ -244,61 +359,88 @@ struct CompanyTrackingsView: View {
                                                                scannedCount: session.actualScannedCount ?? 0),
                                      company: CompanyScanTarget(sessionId: session.id, carrierId: session.carrierId))
                     } label: {
-                        Label(tr("Quét vào phiên này"), systemImage: "viewfinder").foregroundStyle(Color.accent)
+                        Label(tr("Tiếp tục quét"), systemImage: "viewfinder").foregroundStyle(Color.accent)
                     }
-                } footer: { Text(tr("Mỗi kiện quét ở đây là kiện THẬT trên công ty, không xoá được. Lần đầu chỉ quét 1 kiện rồi đối chiếu với web.")) }
-
-                Section {
-                    Button(role: .destructive) { confirmClose = true } label: {
-                        HStack {
-                            Label(tr("Kết thúc phiên"), systemImage: "checkmark.seal")
-                            if closing { Spacer(); ProgressView() }
-                        }
-                    }
-                    .disabled(closing)
-                } footer: { Text(tr("Đóng phiên trên công ty: không quét thêm vào phiên này được.")) }
+                }
             }
 
-            Section(tr("Kiện trong phiên")) {
+            Section {
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent)
-                } else if items.isEmpty && !loading {
-                    Text(tr("Phiên này chưa có kiện nào.")).foregroundStyle(.secondary)
                 }
-                ForEach(items) { t in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, t in
                     NavigationLink { CompanyTrackingDetailView(tracking: t) } label: {
+                        HStack(alignment: .center, spacing: 12) {
+                            // Số thứ tự theo lúc quét: 1 = kiện quét đầu tiên (dòng trên cùng); nằm giữa ô theo chiều dọc
+                            Text("\(rowNumber(index))")
+                                .font(.title3.weight(.heavy).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1).minimumScaleFactor(0.6)
+                                .frame(minWidth: 34, alignment: .center)
                         VStack(alignment: .leading, spacing: 4) {
                             // Mã dài: ăn hết chiều ngang dòng riêng, tự thu nhỏ chữ cho vừa 1 dòng (không cắt "…", không rớt dòng)
                             Text(t.trackingNumber).font(.subheadline.monospaced().bold())
                                 .lineLimit(1).minimumScaleFactor(0.5).allowsTightening(true)
-                            HStack(spacing: 6) {
-                                if t.isUnknown {
-                                    Text(tr("Kiện không xác định")).font(.caption2.bold()).padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background(Color.orange.opacity(0.2), in: Capsule())
-                                }
-                                if t.condition == "DAMAGED" {
-                                    Text(tr("HƯ HỎNG")).font(.caption2.bold()).padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background(Color.dupRed.opacity(0.25), in: Capsule())
-                                }
-                                Text([coStatusText(t.status), t.customerCode.map { tr("khách {0}", $0) }, t.binLocation.map { tr("kệ {0}", $0) }, coFormatTime(t.checkedInAt)]
-                                    .compactMap { $0 }.joined(separator: " · "))
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            // Mỗi thông tin một dòng: khách/kệ (nếu có) · trạng thái + giờ nhập · nhãn (nếu có)
+                            let who = [t.customerCode.map { tr("khách {0}", $0) }, t.binLocation.map { tr("kệ {0}", $0) }]
+                                .compactMap { $0 }.joined(separator: " · ")
+                            if !who.isEmpty {
+                                Text(who).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                             }
+                            Text([coStatusText(t.status), coFormatTime(t.checkedInAt)].joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
+                            // Nhãn (nếu có) ở dòng cuối
+                            if t.isUnknown || t.condition == "DAMAGED" {
+                                HStack(spacing: 6) {
+                                    if t.isUnknown {
+                                        Text(tr("Kiện không xác định")).font(.caption2.bold()).padding(.horizontal, 6).padding(.vertical, 2)
+                                            .background(Color.orange.opacity(0.2), in: Capsule())
+                                    }
+                                    if t.condition == "DAMAGED" {
+                                        Text(tr("HƯ HỎNG")).font(.caption2.bold()).padding(.horizontal, 6).padding(.vertical, 2)
+                                            .background(Color.dupRed.opacity(0.25), in: Capsule())
+                                    }
+                                }
+                            }
+                        }
                         }
                     }
                     .onAppear { if t.id == items.last?.id { Task { await loadMore() } } }
                 }
                 if loading { HStack { Spacer(); ProgressView(); Spacer() } }
             }
+
+            // Kết thúc phiên: nằm cuối màn hình, luôn hỏi xác nhận
+            if current.status == "OPEN" && !closedNow {
+                Section {
+                    Button(role: .destructive) { confirmClose = true } label: {
+                        HStack {
+                            Spacer()
+                            Label(tr("Kết thúc phiên"), systemImage: "checkmark.seal")
+                            if closing { ProgressView().padding(.leading, 6) }
+                            Spacer()
+                        }
+                    }
+                    .disabled(closing)
+                }
+            }
         }
         .navigationTitle(tr("Phiên #{0}", session.id))
         .navigationBarTitleDisplayMode(.inline)
-        .task { if items.isEmpty { await reload() } }
-        .refreshable { await reload() }
+        .toolbar {
+            // Tiêu đề to, dễ nhìn (mặc định của hệ thống khá nhỏ)
+            ToolbarItem(placement: .principal) {
+                Text(tr("Phiên #{0}", session.id))
+                    .font(.system(size: 26, weight: .heavy))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+        }
+        .onAppear { Task { await refreshAll() } }      // quay lại từ màn quét thì số đã quét và danh sách kiện được tải lại
+        .refreshable { await refreshAll() }
         .alert(tr("Kết thúc phiên?"), isPresented: $confirmClose) {
             Button(tr("Huỷ"), role: .cancel) {}
             Button(tr("Kết thúc phiên"), role: .destructive) { Task { await closeSession() } }
-        } message: { Text(tr("Phiên #{0} sẽ được đóng trên công ty, không quét thêm vào phiên này được. Đã quét {1} kiện.", session.id, session.actualScannedCount ?? items.count)) }
+        } message: { Text(tr("Phiên #{0} sẽ được đóng trên công ty, không quét thêm vào phiên này được. Đã quét {1} kiện.", session.id, current.actualScannedCount ?? items.count)) }
         .alert(tr("Không đóng được phiên"), isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(closeError ?? "") }
@@ -312,7 +454,6 @@ struct CompanyTrackingsView: View {
         do {
             try await CompanyAPI.shared.closeSession(id: session.id)
             closedNow = true
-            if coSelectedId == session.id { coSelectedId = 0; coSelectedLabel = "" }      // phiên đã đóng thì bỏ chọn
             Haptics.success()
             dismiss()
         } catch {
@@ -320,26 +461,32 @@ struct CompanyTrackingsView: View {
         }
     }
 
-    private func checkStatusText(_ s: String) -> String {
-        switch s {
-        case "FOUND": return tr("FOUND — có trong danh sách đơn")
-        case "NOT_FOUND": return tr("NOT_FOUND — không có trong danh sách (sẽ là kiện không xác định)")
-        case "DUPLICATE": return tr("DUPLICATE — đã quét rồi")
-        default: return s
+    /// Mã đã nằm trong danh sách đã quét chưa: tìm trong các kiện đã tải của phiên, nếu chưa thấy thì hỏi công ty (DUPLICATE = đã quét rồi).
+    private func runCheck() async {
+        let code = TrackingCutter.normalize(checkCode)
+        guard !code.isEmpty else { return }
+        checking = true; checkError = nil
+        defer { checking = false }
+        let cands = TrackingCutter.candidates(code).list
+        let set = Set(cands)
+        if items.contains(where: { t in
+            set.contains(TrackingCutter.normalize(t.trackingNumber)) ||
+            t.additionalTrackingNumbers.contains { set.contains(TrackingCutter.normalize($0)) }
+        }) { checkFound = true; Haptics.success(); return }
+        do {
+            for c in cands.prefix(4) {
+                let r = try await CompanyAPI.shared.checkTracking(code: c)
+                if r.status == "DUPLICATE" { checkFound = true; Haptics.success(); return }
+            }
+            checkFound = false
+        } catch {
+            checkFound = nil; checkError = error.localizedDescription
         }
     }
 
-    private func runCheck() async {
-        let code = checkCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !code.isEmpty else { return }
-        checking = true
-        defer { checking = false }
-        do {
-            let r = try await CompanyAPI.shared.checkTracking(code: code)
-            checkStatus = r.status; checkDetail = r.detail; checkError = nil
-        } catch {
-            checkStatus = nil; checkDetail = ""; checkError = error.localizedDescription
-        }
+    private func refreshAll() async {
+        if let fresh = try? await CompanyAPI.shared.session(id: session.id) { live = fresh }
+        await reload()
     }
 
     private func reload() async {
@@ -536,7 +683,7 @@ struct CompanyNewSessionView: View {
                 TextField(tr("Cửa kho"), text: $gate).textInputAutocapitalization(.characters).autocorrectionDisabled()
                 TextField(tr("Người giao"), text: $driver)
                 TextField(tr("Số kiện hãng khai"), text: $count).keyboardType(.numberPad)
-            } footer: { Text(tr("Tạo phiên THẬT trên apiwh-dev. Không xoá được, nên chỉ tạo một phiên.")) }
+            }
             if let error { Section { Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent) } }
             Section {
                 if done {
@@ -557,7 +704,7 @@ struct CompanyNewSessionView: View {
         .alert(tr("Tạo phiên?"), isPresented: $confirm) {
             Button(tr("Huỷ"), role: .cancel) {}
             Button(tr("Tạo")) { Task { await create() } }
-        } message: { Text(tr("Sẽ ghi một phiên thật lên apiwh-dev và không xoá được.")) }
+        } message: { Text(tr("Phiên mới sẽ được tạo trên hệ thống công ty.")) }
     }
 
     private func create() async {
@@ -657,5 +804,72 @@ struct ZoomablePhoto: View {
                     .onEnded { _ in dragBase = offset }
             )
             .onTapGesture(count: 2) { withAnimation { scale = 1; base = 1; offset = .zero; dragBase = .zero } }
+    }
+}
+
+
+// MARK: - Bộ lọc "Giờ xe đến" (khoảng ngày)
+struct DateRangeSheet: View {
+    @Binding var from: Date?
+    @Binding var to: Date?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle(tr("Từ ngày"), isOn: Binding(get: { from != nil }, set: { from = $0 ? (from ?? Date()) : nil }))
+                    if let f = from {
+                        DatePicker(tr("Ngày bắt đầu"), selection: Binding(get: { f }, set: { from = $0 }), displayedComponents: .date)
+                    }
+                    Toggle(tr("Đến ngày"), isOn: Binding(get: { to != nil }, set: { to = $0 ? (to ?? Date()) : nil }))
+                    if let t = to {
+                        DatePicker(tr("Ngày kết thúc"), selection: Binding(get: { t }, set: { to = $0 }), displayedComponents: .date)
+                    }
+                }
+                Section {
+                    Button(tr("Xoá lọc"), role: .destructive) { from = nil; to = nil }
+                }
+            }
+            .navigationTitle(tr("Giờ xe đến"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(tr("Xong")) { dismiss() } } }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+/// Logo hãng giao hàng (ảnh vector trong Assets, không có nền).
+/// Hãng chưa có logo (vd. "Other") thì hiện tên chữ như cũ.
+struct CarrierLogo: View {
+    let name: String
+    var code: String? = nil
+    var height: CGFloat = 26
+
+    /// Tên ảnh trong Assets theo tên/mã hãng (FEDEX EXPRESS, FEDEX GROUND, FedEx → cùng logo FedEx).
+    static func asset(name: String, code: String?) -> String? {
+        for text in [name, code ?? ""] {
+            let tokens = text.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+            let joined = tokens.joined()
+            if joined.contains("fedex") { return "logo_fedex" }
+            if joined.contains("dhl") { return "logo_dhl" }
+            if joined.contains("ontrac") { return "logo_ontrac" }
+            if joined.contains("amazon") { return "logo_amazon" }
+            if tokens.contains("usps") { return "logo_usps" }
+            if tokens.contains("ups") { return "logo_ups" }
+        }
+        return nil
+    }
+
+    var body: some View {
+        if let asset = Self.asset(name: name, code: code) {
+            Image(asset)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: height * 3.6, maxHeight: height)
+                .accessibilityLabel(name)
+        } else {
+            Text(name).font(.headline).foregroundStyle(Color.accent)
+        }
     }
 }

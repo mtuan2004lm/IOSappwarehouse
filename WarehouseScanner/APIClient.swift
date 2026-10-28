@@ -385,16 +385,32 @@ actor CompanyAPI {
         try await request(CompanyList<CompanyMapping>.self, "GET", "/customer-code-mappings", query: [URLQueryItem(name: "limit", value: "100")]).data
     }
 
-    func openSessions() async throws -> [CompanySession] {
-        try await request(CompanyList<CompanySession>.self, "GET", "/receiving-sessions",
-                          query: [URLQueryItem(name: "status", value: "OPEN"), URLQueryItem(name: "limit", value: "50")]).data
+    /// Một phiên theo id (kèm `actualScannedCount` tính sẵn).
+    func session(id: Int) async throws -> CompanySession {
+        try await request(CompanyEnvelope<CompanySession>.self, "GET", "/receiving-sessions/\(id)").data
+    }
+
+    /// Danh sách phiên, lọc ở máy chủ giống web: trạng thái (OPEN | CLOSED), hãng, cửa (`dockGate`, khớp đúng),
+    /// giờ xe đến (`openedFrom`/`openedTo` — Swagger: lọc theo `vehicleArrivedAt`). nil/rỗng = không lọc.
+    func sessions(status: String?, carrierId: Int?, dockGate: String? = nil, arrivedFrom: Date? = nil, arrivedTo: Date? = nil) async throws -> [CompanySession] {
+        var q = [URLQueryItem(name: "limit", value: "50")]
+        if let status, !status.isEmpty { q.append(URLQueryItem(name: "status", value: status)) }
+        if let carrierId, carrierId > 0 { q.append(URLQueryItem(name: "carrierId", value: String(carrierId))) }
+        if let dockGate, !dockGate.isEmpty { q.append(URLQueryItem(name: "dockGate", value: dockGate)) }
+        let iso = ISO8601DateFormatter()
+        if let arrivedFrom { q.append(URLQueryItem(name: "openedFrom", value: iso.string(from: arrivedFrom))) }
+        if let arrivedTo { q.append(URLQueryItem(name: "openedTo", value: iso.string(from: arrivedTo))) }
+        return try await request(CompanyList<CompanySession>.self, "GET", "/receiving-sessions", query: q).data
     }
 
     /// Chỉ đọc: kiện của một phiên (GET /trackings?receivingSessionId=). Trả về một trang.
     func trackings(sessionId: Int, page: Int, limit: Int = 30) async throws -> [CompanyTracking] {
         let base = [URLQueryItem(name: "receivingSessionId", value: String(sessionId)),
                     URLQueryItem(name: "page", value: String(page)),
-                    URLQueryItem(name: "limit", value: String(limit))]
+                    URLQueryItem(name: "limit", value: String(limit)),
+                    // Kiện quét đầu tiên lên trên (Swagger: sort=checkedInAt, order=asc)
+                    URLQueryItem(name: "sort", value: "checkedInAt"),
+                    URLQueryItem(name: "order", value: "asc")]
         // Web công ty gửi thêm include=orderItems,holdCaseItems để nhận kèm dòng hàng; nếu máy chủ từ chối thì gọi lại như cũ.
         if let r = try? await request(CompanyList<CompanyTracking>.self, "GET", "/trackings",
                                       query: base + [URLQueryItem(name: "include", value: "orderItems,holdCaseItems")]) { return r.data }

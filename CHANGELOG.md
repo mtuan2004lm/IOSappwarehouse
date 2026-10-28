@@ -9,6 +9,53 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-28 · ⭐ 🔥 📱 Chi tiết phiên: tiêu đề "Phiên #N" to hơn, đánh số thứ tự, kiện quét đầu tiên lên trên
+- Tiêu đề "Phiên #17" trên thanh trên cùng: chữ **26pt đậm** (trước là cỡ mặc định nhỏ), đặt bằng `ToolbarItem(.principal)`.
+- ⭐ Danh sách kiện nay sắp **kiện quét đầu tiên ở trên cùng** (theo ý bạn): `CompanyAPI.trackings` gửi `sort=checkedInAt&order=asc` (Swagger `GET /trackings`; mặc định máy chủ là `createdAt` giảm dần), nên sắp đúng cả khi phiên có nhiều trang (tải thêm 30 kiện/lần). Mỗi kiện có **số thứ tự theo lúc quét**: 1 = kiện quét đầu tiên (dòng trên cùng), tăng dần xuống dưới; `rowNumber` = vị trí dòng. Số nằm **giữa ô theo chiều dọc** ở bên trái, chữ to hơn (`title3` đậm). ⭐ **Mỗi thông tin một dòng** trong từng kiện (trước đó nhãn "Kiện không xác định" và dòng chữ xám nằm chung một hàng nên bị ngắt dòng xấu): dòng 1 mã tracking · dòng 2 "khách …" và "kệ …" (chỉ khi có) · dòng 3 trạng thái + giờ nhập (vd "Đã nhập · 26/10 15:20") · **dòng cuối** nhãn "Kiện không xác định"/"HƯ HỎNG" (chỉ khi có; theo ý bạn để ở cuối). Số này chỉ để đếm trên màn hình, không phải mã của hệ thống. 🔥 Chưa thử trên máy: máy chủ nhận `sort`/`order` đúng như Swagger không (nếu lỗi thì danh sách kiện báo lỗi).
+- Không đổi API, không đổi `Localization.swift`.
+
+### 2026-10-28 · ⭐ 🔥 📱 Bộ lọc danh sách phiên: cả 4 bộ lọc gọi API (manager dặn)
+- ⭐ Trước đây chỉ **Hãng** và **Trạng thái** gọi API; **Cửa** và **Giờ xe đến** lọc trên máy trong 50 phiên đã tải (phiên cũ ngoài 50 phiên đầu sẽ không bao giờ hiện). Nay cả 4 đều gửi lên `GET /receiving-sessions`: `carrierId`, `status`, `dockGate` (khớp đúng), `openedFrom`/`openedTo` (Swagger: "filters vehicleArrivedAt" = giờ xe đến; gửi ISO, từ 00:00 ngày bắt đầu đến 23:59:59 ngày kết thúc theo giờ máy).
+- `CompanyAPI.sessions(status:carrierId:dockGate:arrivedFrom:arrivedTo:)` (`APIClient.swift`); `shown` nay chính là danh sách máy chủ trả về, bỏ lọc trên máy.
+- Đổi cửa / ngày → tự gọi lại API (`onChange` fGate, fFrom, fTo). Chỉ nhận kết quả của lần gọi mới nhất (`loadToken`), vì "Xoá lọc" đổi nhiều bộ lọc cùng lúc.
+- Danh sách cửa trong menu nhớ các cửa đã thấy (`knownGates`): lọc theo một cửa thì máy chủ chỉ trả phiên của cửa đó, nhưng vẫn chọn lại được cửa khác. Cửa chưa từng hiện trong lần tải nào thì chưa có trong menu (API không có endpoint danh sách cửa).
+- 🔥 Chưa thử trên máy: máy chủ có nhận `dockGate` và `openedFrom/To` đúng như Swagger không; cách máy chủ hiểu mốc giờ (UTC `Z`) so với giờ Việt Nam/Oregon; giới hạn vẫn 50 phiên mỗi lần (API cho tối đa 500).
+
+### 2026-10-28 · ⭐ 📱 Logo hãng giao hàng thay chữ (theo web của manager)
+- ⭐ Thêm **6 logo vector** vào `Assets.xcassets` (mỗi logo một imageset `logo_*`, bật Preserve Vector Data): `logo_dhl`, `logo_fedex`, `logo_ontrac`, `logo_usps`, `logo_ups`, `logo_amazon`. File SVG gốc do bạn gửi; mình chỉ dọn cho Xcode đọc chắc (đưa màu từ `<style>`/class vào thuộc tính, bỏ metadata Inkscape/Illustrator, đặt kích thước px = viewBox), hình không đổi.
+- Danh sách phiên: tên hãng màu cam được thay bằng **logo, không có nền trắng** (theo ý bạn). ⭐ **Giao diện tối:** Amazon, OnTrac, USPS có thêm bản `*_dark.svg` (chữ tối đổi sang **trắng**, giữ nguyên biểu tượng/màu cam/đỏ) đặt trong cùng imageset với `appearances: luminosity=dark` — Xcode tự chọn bản theo giao diện sáng/tối của app (lỗi ban đầu: chữ "amazon" màu đen tuyền biến mất trên nền tối, chỉ còn nụ cười cam). DHL, UPS và **FedEx** chỉ có một bản, giữ **đúng màu gốc** (FedEx: "Fed" tím + "Ex" cam; theo ý bạn đã bỏ bản chữ trắng, nên ở giao diện tối chữ tím hơi tối nhưng vẫn là màu thương hiệu). Chi tiết phiên: logo to hơn nằm trên số "đã quét / hãng khai".
+- Nhận diện hãng theo **tên (hoặc mã)** hãng, không phân biệt hoa thường: có "fedex" (FedEx, FEDEX EXPRESS, FEDEX GROUND) → FedEx; "dhl"; "ontrac"; "amazon" (Amazon Logistics/Package/Pallet) → Amazon; từ riêng "usps" → USPS; từ riêng "ups" → UPS. **Hãng chưa có logo (vd. "Other") vẫn hiện tên chữ như cũ.**
+- Code: struct `CarrierLogo` thêm cuối `SessionsView.swift` (không tạo file Swift mới); không đổi API, không đổi `Localization.swift`.
+- Bộ lọc "Hãng" vẫn là chữ (menu hệ thống không hiện ảnh được).
+- 🔥 Chưa thử trên máy: (1) Xcode có hiện đúng cả 6 SVG không (nếu logo nào trống/đen thì báo để đổi sang PNG); (2) tên hãng thật trên hệ thống khớp quy tắc nhận diện ở trên; (3) kích thước logo vừa mắt (USPS dài nên khá nhỏ).
+
+### 2026-10-28 · ⭐ 🔥 📱 Chi tiết phiên: gọn lại theo góp ý của manager
+- **Bỏ** dòng "Đang dùng phiên này / Chọn dùng phiên này" (chức năng cũ chỉ ghi nhớ một phiên trên máy, không còn ai dùng: màn quét lấy phiên từ chính màn đang mở) và dấu ✓ tương ứng ở danh sách phiên; bỏ 2 `@AppStorage` `company.selectedSessionId/Label`.
+- **Số "đã quét / hãng khai"**: bỏ chữ ghi chú, số **rất to (52pt), canh giữa**, xanh khi đủ, vàng khi thiếu.
+- ⭐ **Một ô quét/gõ mã** thay khung "Kiểm tra mã với công ty": bỏ tiêu đề và nút "Kiểm tra mã (không ghi)"; gõ/dán/quét bằng đầu đọc rồi nhấn Search/Enter → nếu mã đã nằm trong danh sách đã quét thì hiện ✓ xanh **"Đã có trong danh sách đã quét"**, không thì "Chưa có trong danh sách đã quét". Cách tìm: (1) trong các kiện của phiên đã tải (mã chính và mã phụ, qua `TrackingCutter.candidates`); (2) nếu chưa thấy, hỏi công ty `check-tracking-scan` (tối đa 4 mã ứng viên), `DUPLICATE` = đã quét rồi (có thể ở phiên khác). Không còn dòng JSON/chuỗi FOUND/NOT_FOUND.
+- Nút "Quét vào phiên này" đổi thành **"Tiếp tục quét"**.
+- Bỏ tiêu đề "Kiện trong phiên" và dòng "Phiên này chưa có kiện nào."
+- ⭐ Nút **Kết thúc phiên** chuyển xuống **cuối màn hình** (sau danh sách kiện), vẫn luôn hỏi xác nhận trước khi đóng.
+- Màn này nay tự tải lại mỗi lần hiện (`onAppear`): lấy lại phiên `GET /receiving-sessions/{id}` (hàm mới `CompanyAPI.session(id:)`) để số đã quét cập nhật sau khi quay về từ màn quét, rồi tải lại danh sách kiện.
+- `Localization.swift`: thêm 2 câu EN, bỏ 11 câu không còn dùng. Không đổi logic quét.
+- 🔥 Chưa thử trên máy: ô quét có tìm đúng mã đã quét ở phiên khác không; `GET /receiving-sessions/{id}` có giải mã được `CompanySession` không (nếu lỗi thì số đã quét giữ như lần tải danh sách).
+
+### 2026-10-28 · ⭐ 🔥 📱 Danh sách phiên: bộ lọc, icon, số đã quét/khai to và có màu (góp ý của manager)
+- Bỏ tiêu đề "Phiên đang mở" (danh sách nay có thể hiện cả phiên đã đóng).
+- ⭐ **Bộ lọc giống web** ở đầu danh sách (thanh cuộn ngang): **Hãng**, **Trạng thái** (Tất cả / Đang mở / Đã đóng), **Cửa**, **Giờ xe đến** (từ ngày – đến ngày), nút **Xoá lọc** (hiện khi đang lọc). Mặc định tất cả (giống web). Hãng và trạng thái lọc ở máy chủ (`GET /receiving-sessions?status=&carrierId=`, hàm mới `CompanyAPI.sessions(status:carrierId:)` thay `openSessions()`); cửa và giờ xe đến lọc ngay trên máy (theo `dockGate` và `vehicleArrivedAt` của các phiên đã tải; danh sách cửa lấy từ các phiên đang hiện).
+- **Icon thay chữ:** "cửa D2" → icon cửa `door.left.hand.closed` + D2; thêm icon xe `box.truck` trước biển số/loại xe; "xe đến 28/10 11:29" → icon đồng hồ `clock` + giờ. Giữ nguyên "mở bởi …".
+- ⭐ **Số "đã quét / hãng khai"** to hơn (30pt, đậm); **xanh khi X ≥ Y** (đủ kiện), **vàng khi X < Y** (còn thiếu); không có số khai thì để màu thường. Cùng màu ở dòng "Đã quét / hãng khai" trong chi tiết phiên.
+- `SessionsView.swift`: thêm `filterBar`, `DateRangeSheet` (cuối file, không tạo file Swift mới), `coDetailText`/`coExtraText`/`coCountColor`; `Localization.swift`: thêm 12 câu EN, bỏ 3 câu không còn dùng.
+- **Mỗi thông tin một dòng** (theo ý bạn, sau khi xem bản đầu): cửa · người giao (icon vô lăng `steeringwheel`, khác icon người của "mở bởi") · xe (biển số · loại xe) · giờ xe đến · trạm (icon `building.2`) · mở bởi (icon `person.crop.circle`); dòng nào không có dữ liệu thì không hiện. Hàm `coInfoRows`/`infoRow` thay `coDetailText`/`coExtraText`.
+- 🔥 Chưa thử trên máy: (1) máy chủ có nhận `carrierId` cùng `status` (theo Swagger có); (2) danh sách chỉ tải 50 phiên (limit 50), nếu máy chủ trả phiên cũ trước thì "Tất cả" có thể thiếu phiên mới; (3) icon `box.truck`/`door.left.hand.closed` cần iOS 16 trở lên (đúng với app).
+
+### 2026-10-28 · ⭐ 📱 Bỏ các dòng chữ nhỏ dùng khi lập trình (chuẩn bị cho nhân viên dùng thật)
+- Bỏ chú thích nhỏ dưới các mục: danh sách phiên ("Chạm một phiên…", "Đang chọn…"), chi tiết phiên ("Chỉ xem. Chưa ghi gì lên công ty.", "Chỉ hỏi công ty mã này đã có chưa…", "Mỗi kiện quét ở đây là kiện THẬT…", chú thích dưới nút Kết thúc phiên), màn Tạo phiên ("Tạo phiên THẬT trên apiwh-dev…"), Cài đặt ("Đăng nhập bằng tài khoản kho…", "Màn quét camera luôn dùng nền tối…").
+- Bỏ mục **"Quy tắc mã kho đang dùng (4)"** (hiện regex) khỏi Cài đặt; quy tắc vẫn chạy bình thường (`AppStore.swift`, `WarehouseRule.builtIn`).
+- Hộp xác nhận tạo phiên: "Sẽ ghi một phiên thật lên apiwh-dev và không xoá được." → "Phiên mới sẽ được tạo trên hệ thống công ty." (EN: The new session will be created on the company system.).
+- Sửa `SessionsView.swift`, `SettingsView.swift`, `Localization.swift` (xoá 11 câu dịch không còn dùng, thêm 1). Không đổi logic.
+- Còn giữ (chưa hỏi): khung "Kiểm tra mã với công ty" và dòng "Chọn dùng phiên này" trong chi tiết phiên.
+
 ### 2026-10-28 · ⭐ 🔥 📱 Bản 2 (Build 2): dọn code trước khi phát cho nhân viên
 - ⭐ **Khai báo mã hóa:** thêm `ITSAppUsesNonExemptEncryption = NO` (app chỉ dùng HTTPS có sẵn của iOS). Từ bản này Apple không hỏi "Missing Compliance" trên TestFlight nữa, người có quyền Developer đưa build vào nhóm được mà không cần manager trả lời. Sửa `Config/Info.plist`, `project.yml` và `project.pbxproj` (`INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO`, cả Debug và Release).
 - **Bỏ ATS thừa:** xoá `NSAllowsArbitraryLoads` (cho phép HTTP tự do) khỏi `Config/Info.plist` và `project.yml`; app chỉ gọi API `https://`. 🔥 Nếu sau này có địa chỉ ảnh/API dạng `http://` thì sẽ không tải được.
