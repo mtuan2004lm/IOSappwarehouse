@@ -9,6 +9,14 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-28 · ⭐ 🔥 📱 Chi tiết phiên: nút sao chép mã tracking
+- Mỗi kiện trong danh sách có **nút sao chép nhỏ** (icon `doc.on.doc`, 28pt) **nằm ngay kế bên mã tracking** (theo ý bạn; bản đầu đặt ở mép phải dòng, to hơn): bấm → chép **mã tracking** (`trackingNumber`) vào bộ nhớ tạm, icon đổi thành ✓ xanh 1,5 giây kèm rung nhẹ. Giữ lâu lên dòng kiện cũng ra menu **"Sao chép mã"**.
+- Code: `copyTracking(_:)` + `@State copiedId` trong `CompanyTrackingsView` (`SessionsView.swift`, thêm `import UIKit` cho `UIPasteboard`); `Localization.swift` thêm 1 câu EN ("Sao chép mã" → "Copy code").
+- 🔥 Chưa thử trên máy: nút `.borderless` nằm trong dòng có `NavigationLink` — bấm nút chỉ được chép, **không** được mở chi tiết kiện. Nếu bấm nút mà vẫn mở chi tiết thì báo để đổi cách làm.
+
+### 2026-10-28 · Tài liệu: ghi lại quy tắc quét mã trong README (không đổi code)
+- `README.md` thêm mục **"Quy tắc quét mã"**: (1) bảng cắt mã vạch theo hãng (`TrackingCutter`), (2) luồng quét FOUND / NOT_FOUND ("ting") / DUPLICATE / 3 ting bắt buộc END CODE / NO NAME, (3) 4 quy tắc mã kho cài sẵn và các sửa lỗi OCR. Chép từ code hiện tại; sửa quy tắc trong code thì cập nhật mục này.
+
 ### 2026-10-28 · ⭐ 🔥 📱 Danh sách phiên: hiện lại "người mở phiên" và trạm
 - ⭐ Lỗi: danh sách phiên **không có dòng "mở bởi …" và trạm** vì `GET /receiving-sessions` chỉ trả `userId`/`stationId`; muốn kèm người mở phiên, trạm, hãng phải gửi `include=user,station,carrier` (Swagger ghi rõ "Present only when ?include=user was requested"; cấu trúc `user {id, username, fullName}`, `station`/`carrier {id, code, name}` khớp với model trong app). App chưa bao giờ gửi tham số này (hãng thì tra thêm bằng danh sách hãng nên vẫn hiện).
 - `CompanyAPI.sessions(...)` và `CompanyAPI.session(id:)` nay gửi `include=user,station,carrier`; máy chủ từ chối thì tự gọi lại như cũ (không làm hỏng danh sách).

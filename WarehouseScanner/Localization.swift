@@ -7,6 +7,7 @@ enum L10n {
         "Mất kết nối, đang tự gửi lại ({0} nhãn chờ)": "Connection lost, resending automatically ({0} labels waiting)",
         "ĐÃ DỪNG QUÉT": "SCANNING STOPPED",
         "Tiếp tục quét": "Continue scanning",
+        "Sao chép mã": "Copy code",
         "Quay lại danh sách phiên": "Back to session list",
         "Huỷ": "Cancel",
         "Dừng quét": "Stop scanning",

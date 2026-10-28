@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SessionsView: View {
     @EnvironmentObject var lang: LangStore   // đổi ngôn ngữ thì làm mới màn hình
@@ -290,6 +291,7 @@ struct CompanyTrackingsView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var checkCode = ""
+    @State private var copiedId: String?           // kiện vừa sao chép mã (hiện dấu ✓ trong 1,5 giây)
     @State private var checking = false
     @State private var checkFound: Bool?           // nil = chưa kiểm tra; true = đã có trong danh sách đã quét
     @State private var checkError: String?
@@ -301,6 +303,17 @@ struct CompanyTrackingsView: View {
     private let pageSize = 30
 
     private var current: CompanySession { live ?? session }
+
+    /// Chép mã tracking của kiện vào bộ nhớ tạm; hiện ✓ xanh 1,5 giây.
+    private func copyTracking(_ t: CompanyTracking) {
+        UIPasteboard.general.string = t.trackingNumber
+        Haptics.success()
+        copiedId = t.id
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if copiedId == t.id { copiedId = nil }
+        }
+    }
 
     /// Số thứ tự của kiện theo lúc quét: máy chủ trả kiện quét đầu tiên ở trên cùng (sort=checkedInAt, order=asc), nên số = vị trí dòng.
     private func rowNumber(_ index: Int) -> Int { index + 1 }
@@ -379,8 +392,20 @@ struct CompanyTrackingsView: View {
                                 .frame(minWidth: 34, alignment: .center)
                         VStack(alignment: .leading, spacing: 4) {
                             // Mã dài: ăn hết chiều ngang dòng riêng, tự thu nhỏ chữ cho vừa 1 dòng (không cắt "…", không rớt dòng)
-                            Text(t.trackingNumber).font(.subheadline.monospaced().bold())
-                                .lineLimit(1).minimumScaleFactor(0.5).allowsTightening(true)
+                            HStack(spacing: 4) {
+                                Text(t.trackingNumber).font(.subheadline.monospaced().bold())
+                                    .lineLimit(1).minimumScaleFactor(0.5).allowsTightening(true)
+                                // Nút sao chép nhỏ kế bên mã (bấm nút không mở chi tiết kiện); giữ lâu lên dòng cũng ra menu "Sao chép mã"
+                                Button { copyTracking(t) } label: {
+                                    Image(systemName: copiedId == t.id ? "checkmark.circle.fill" : "doc.on.doc")
+                                        .font(.footnote)
+                                        .foregroundStyle(copiedId == t.id ? Color.okGreen : Color.accent)
+                                        .frame(width: 28, height: 28)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel(tr("Sao chép mã"))
+                            }
                             // Mỗi thông tin một dòng: khách/kệ (nếu có) · trạng thái + giờ nhập · nhãn (nếu có)
                             let who = [t.customerCode.map { tr("khách {0}", $0) }, t.binLocation.map { tr("kệ {0}", $0) }]
                                 .compactMap { $0 }.joined(separator: " · ")
@@ -405,6 +430,7 @@ struct CompanyTrackingsView: View {
                         }
                         }
                     }
+                    .contextMenu { Button { copyTracking(t) } label: { Label(tr("Sao chép mã"), systemImage: "doc.on.doc") } }
                     .onAppear { if t.id == items.last?.id { Task { await loadMore() } } }
                 }
                 if loading { HStack { Spacer(); ProgressView(); Spacer() } }
