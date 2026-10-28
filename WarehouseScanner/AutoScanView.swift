@@ -16,6 +16,9 @@ struct AutoScanView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var paused = false              // đã dừng quét (chốt kiện)
     @State private var confirmStop = false
+    @State private var confirmClose = false        // hỏi xác nhận trước khi đóng phiên trên công ty
+    @State private var closing = false
+    @State private var closeError: String?
     @State private var finalCount = 0
 
     init(session: ReceivingSession, company: CompanyScanTarget) {
@@ -47,12 +50,6 @@ struct AutoScanView: View {
                         }
                         if let b = vm.banner {
                             Text(b).font(.footnote.bold()).padding(8).background(.ultraThinMaterial, in: Capsule())
-                        }
-                        if !vm.ocrDebug.isEmpty {
-                            Text("OCR: " + vm.ocrDebug).font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.85))
-                                .lineLimit(3).multilineTextAlignment(.leading)
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
                         }
                         if let h = vm.hint {
                             Text(h).font(.footnote.bold()).foregroundStyle(.white).multilineTextAlignment(.center)
@@ -94,6 +91,10 @@ struct AutoScanView: View {
                             Text(tr("Tiếp tục quét")).font(.headline).frame(maxWidth: .infinity, minHeight: 50)
                         }
                         .buttonStyle(.borderedProminent).tint(.accent)
+                        Button { confirmClose = true } label: {
+                            Text(tr("Kết thúc phiên")).font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                        }
+                        .buttonStyle(.bordered).tint(.red)
                         Button(tr("Quay lại danh sách phiên")) { dismiss() }.foregroundStyle(.secondary)
                     }
                     .foregroundStyle(.white).padding(24).frame(maxWidth: 380)
@@ -146,6 +147,29 @@ struct AutoScanView: View {
             Button(tr("Huỷ"), role: .cancel) {}
             Button(tr("Dừng quét")) { Task { await stopScanning() } }
         } message: { Text(tr("Đã quét {0} kiện. Phiên trên công ty vẫn mở.", vm.sent)) }
+        .alert(tr("Kết thúc phiên?"), isPresented: $confirmClose) {
+            Button(tr("Huỷ"), role: .cancel) {}
+            Button(tr("Kết thúc phiên"), role: .destructive) { Task { await closeSession() } }
+        } message: { Text(tr("Phiên #{0} sẽ được đóng trên công ty, không quét thêm vào phiên này được. Đã quét {1} kiện.", company.sessionId, vm.sent)) }
+        .alert(tr("Không đóng được phiên"), isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(closeError ?? "") }
+    }
+
+    // MARK: Kết thúc phiên (GHI lên công ty: đóng phiên)
+
+    private func closeSession() async {
+        guard !closing else { return }
+        closing = true
+        defer { closing = false }
+        do {
+            try await CompanyAPI.shared.closeSession(id: company.sessionId)
+            vm.stop(); camera.ocrEnabled = false; camera.stop()
+            Haptics.success()
+            dismiss()
+        } catch {
+            closeError = error.localizedDescription
+        }
     }
 
     // MARK: Dừng quét tạm thời (không đổi gì trên công ty)
@@ -196,6 +220,7 @@ struct AutoScanView: View {
             smallCounter(tr("BỎ QUA"), vm.skipped, .unknownGray)
             Menu {
                 Button { confirmStop = true } label: { Label(tr("Dừng quét"), systemImage: "pause.circle") }
+                Button(role: .destructive) { confirmClose = true } label: { Label(tr("Kết thúc phiên"), systemImage: "checkmark.seal") }
             } label: {
                 Image(systemName: "ellipsis").font(.title3.bold()).foregroundStyle(.white)
                     .frame(width: 46, height: 46).background(Color.navy.opacity(0.9), in: Circle())

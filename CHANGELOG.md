@@ -9,6 +9,25 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-28 · ⭐ 🔥 📱 Bản 2 (Build 2): dọn code trước khi phát cho nhân viên
+- ⭐ **Khai báo mã hóa:** thêm `ITSAppUsesNonExemptEncryption = NO` (app chỉ dùng HTTPS có sẵn của iOS). Từ bản này Apple không hỏi "Missing Compliance" trên TestFlight nữa, người có quyền Developer đưa build vào nhóm được mà không cần manager trả lời. Sửa `Config/Info.plist`, `project.yml` và `project.pbxproj` (`INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO`, cả Debug và Release).
+- **Bỏ ATS thừa:** xoá `NSAllowsArbitraryLoads` (cho phép HTTP tự do) khỏi `Config/Info.plist` và `project.yml`; app chỉ gọi API `https://`. 🔥 Nếu sau này có địa chỉ ảnh/API dạng `http://` thì sẽ không tải được.
+- **Bỏ `NSLocalNetworkUsageDescription`** ("kết nối server trong mạng nội bộ") khỏi `project.pbxproj` và `project.yml` vì không còn dùng server nội bộ.
+- **Sửa chữ xin quyền ảnh** (`NSPhotoLibraryUsageDescription`): "Chọn ảnh nhãn hoặc ảnh hàng hỏng để gửi lên công ty." (trước: "…chỉ dùng khi chạy trên giả lập").
+- **Bỏ dòng debug "OCR: …"** trên màn quét (`AutoScanView.swift`); biến `ocrDebug` trong `AutoScanViewModel` vẫn còn nhưng không hiển thị.
+- Chỉ sửa đúng các dòng trên trong `project.pbxproj` (các dòng ký app, profile `WH Scanner 3PL - AppStore` giữ nguyên).
+- 📱 Việc của người build: tăng **Build** lên 2 (General → Build), Archive, Export, Transporter. Chưa đổi API sang bản thật (chờ địa chỉ từ manager).
+
+### 2026-10-28 · ⭐ 🔥 📱 Thêm nút "Kết thúc phiên" (đóng phiên trên công ty)
+- Trước đó mình đã bỏ nút này vì tưởng API công ty chưa có lệnh đóng phiên; thực tế tài liệu API có `PATCH /receiving-sessions/{id}` (đổi `status` OPEN/CLOSED), nên nay thêm lại.
+- `APIClient.swift`: `CompanyAPI.closeSession(id:)` gọi `PATCH /receiving-sessions/{id}` body `{"status":"CLOSED","vehicleDepartedAt":"<giờ hiện tại, UTC>"}` đúng theo Swagger (đã đọc `/api/docs` ngày 28/10/2026: `status` OPEN|CLOSED, `vehicleDepartedAt` "thường đặt cùng status=CLOSED"). Không giải mã phiên trả về, tránh báo lỗi sau khi đã đóng.
+- `AutoScanView.swift`: nút **Kết thúc phiên** ở menu ⋯ (màn quét) và ở màn "ĐÃ DỪNG QUÉT"; luôn hỏi xác nhận ("Phiên #… sẽ được đóng trên công ty, không quét thêm được. Đã quét … kiện."); thành công thì tự thoát màn quét, lỗi thì hiện thông báo "Không đóng được phiên" kèm lý do. "Dừng quét" vẫn chỉ dừng trên máy, không đổi gì trên công ty.
+- `SessionsView.swift` (màn chi tiết phiên `CompanyTrackingsView`): thêm nút đỏ **Kết thúc phiên** dưới nút "Quét vào phiên này" (chỉ khi phiên đang OPEN), cùng hộp xác nhận và thông báo lỗi như bên màn quét; đóng xong tự quay về danh sách và bỏ chọn phiên nếu đó là phiên đang chọn.
+- `SessionsView.swift`: danh sách phiên nay tải lại mỗi lần quay về màn này (`onAppear`, trước đây chỉ tải một lần), nên phiên vừa đóng biến mất khỏi "Phiên đang mở".
+- `Localization.swift`: thêm 5 câu tiếng Anh (End session / End session? / nội dung xác nhận / Could not end the session / chú thích dưới nút).
+- 🔥 Chưa thử trên máy thật: cần thử trên phiên thử (đóng xong công ty không cho quét thêm: lỗi `SESSION_CLOSED`; Swagger cho phép PATCH `status: OPEN` để mở lại phiên nhưng app chưa có nút mở lại; nếu cần thì mở lại trên web). Nếu API trả 400/403 vì thiếu trường hoặc thiếu quyền, thông báo lỗi sẽ hiện nguyên văn để biết sửa gì.
+- Lưu ý: sau khi đóng, màn chi tiết phiên (phía sau) vẫn còn nút "Quét vào phiên này" cho đến khi quay về danh sách và vào lại; quét vào phiên đã đóng sẽ báo lỗi.
+
 ### 2026-10-28 · ⭐ 🔥 📱 Chuẩn bị phát hành: đổi Bundle ID và Team theo tài khoản công ty
 - Bundle ID `com.tina.warehousescanner` → **`com.wh.internal`** (khớp app đã tạo sẵn trên App Store Connect: tên "WH Scanner 3PL", SKU WH-SCANNER-IOS-001, Apple ID 6825729096).
 - Team (`DEVELOPMENT_TEAM`) `XJV6B4PX32` → **`4A2CPW6M9J`** (manager gửi). Sửa ở `project.pbxproj` (Debug + Release) và `project.yml`.

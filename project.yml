@@ -24,10 +24,8 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSCameraUsageDescription: Ứng dụng dùng camera để quét mã vạch và đọc mã kho trên nhãn hàng.
-        NSLocalNetworkUsageDescription: Ứng dụng kết nối tới server nhận hàng trong mạng nội bộ của kho.
-        NSPhotoLibraryUsageDescription: Chọn ảnh hàng hỏng (chỉ dùng khi chạy trên giả lập).
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true     # server nội bộ dùng http (không https)
+        NSPhotoLibraryUsageDescription: Chọn ảnh nhãn hoặc ảnh hàng hỏng để gửi lên công ty.
+        ITSAppUsesNonExemptEncryption: false     # chỉ dùng HTTPS của hệ thống (miễn khai báo mã hóa)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wh.internal

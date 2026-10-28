@@ -48,6 +48,10 @@ App không còn tải quy tắc mã kho từ server: 4 quy tắc nằm trong `Ap
 
 Không cần quét mã END CODE: khi có tracking chưa có thông tin, màn quét hiện nút **END CODE**; bấm để chốt (đủ 3/3 thì bắt buộc bấm mới quét tiếp). Quét mã `ENDCODE` bằng camera vẫn dùng được.
 
+## Kết thúc phiên (28/10/2026)
+
+Có nút **Kết thúc phiên** ở 3 chỗ: menu ⋯ ở hàng dưới màn quét, màn "ĐÃ DỪNG QUÉT", và màn chi tiết phiên (nút đỏ dưới "Quét vào phiên này"). Bấm → hỏi xác nhận → gọi `PATCH /receiving-sessions/{id}` với `{"status":"CLOSED","vehicleDepartedAt":<giờ hiện tại>}` (theo Swagger) để đóng phiên trên công ty; phiên đóng rồi không quét thêm được. "Dừng quét" chỉ dừng camera trên máy, không đóng phiên. Code: `CompanyAPI.closeSession` (`APIClient.swift`), `closeSession()` (`AutoScanView.swift`). Chưa thử trên máy thật.
+
 ## Báo hư hỏng phiên công ty (26/10/2026)
 
 Nút "Hỏng" ở màn quét phiên công ty mở bảng Báo hư hỏng: loại hư hỏng (nhiều lựa chọn) → ảnh → Quyết định (Nhận hàng / Từ chối, nằm cuối) → Gửi. Mỗi kiện một báo cáo. Code: `CompanyDamageSheet` (`AutoScanView.swift`), `CompanyAPI.reportDamage` (`APIClient.swift`).

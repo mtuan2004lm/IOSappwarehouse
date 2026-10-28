@@ -434,6 +434,15 @@ actor CompanyAPI {
         return r.data["id"]?.intValue ?? 0
     }
 
+    /// GHI lên công ty: đóng phiên nhận hàng (PATCH /receiving-sessions/{id}). Chỉ gọi khi người dùng đã xác nhận.
+    /// Theo Swagger: `status` = CLOSED, thường kèm `vehicleDepartedAt` (giờ xe rời đi, ISO 8601 UTC dạng ...Z).
+    /// Không giải mã phiên trả về (tránh báo lỗi sau khi đã đóng xong).
+    func closeSession(id: Int) async throws {
+        let departed = ISO8601DateFormatter().string(from: Date())      // vd. 2026-10-28T05:40:00Z
+        _ = try await request(CompanyEnvelope<CompanyJSON>.self, "PATCH", "/receiving-sessions/\(id)",
+                              json: ["status": "CLOSED", "vehicleDepartedAt": departed])
+    }
+
     /// GHI lên công ty: quét một kiện (POST /trackings/scan). Gửi lại cùng mã thì công ty trả DUPLICATE (không tạo trùng).
     func scan(trackingNumber: String, additional: [String], carrierId: Int, customerCode: String, sessionId: Int) async throws -> (id: String, matchStatus: String, checkIn: String) {
         var body: [String: Any] = ["trackingNumber": trackingNumber, "carrierId": carrierId, "receivingSessionId": sessionId]

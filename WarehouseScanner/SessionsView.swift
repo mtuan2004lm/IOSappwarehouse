@@ -57,7 +57,7 @@ struct SessionsView: View {
         .sheet(isPresented: $showCoNew, onDismiss: { Task { await loadCompany() } }) {
             NavigationStack { CompanyNewSessionView(carriers: coCarriers) }
         }
-        .task { await loadCompany() }
+        .onAppear { Task { await loadCompany() } }      // mỗi lần quay lại màn này (vd. sau khi kết thúc phiên) tải lại danh sách
         .refreshable { await loadCompany() }
     }
 
@@ -184,6 +184,11 @@ struct CompanyTrackingsView: View {
     @State private var checkStatus: String?
     @State private var checkDetail = ""
     @State private var checkError: String?
+    @State private var confirmClose = false        // hỏi xác nhận trước khi đóng phiên trên công ty
+    @State private var closing = false
+    @State private var closedNow = false           // vừa đóng xong trong lần xem này
+    @State private var closeError: String?
+    @Environment(\.dismiss) private var dismiss
     private let pageSize = 30
 
     var body: some View {
@@ -230,7 +235,7 @@ struct CompanyTrackingsView: View {
             } header: { Text(tr("Kiểm tra mã với công ty")) }
               footer: { Text(tr("Chỉ hỏi công ty mã này đã có chưa, không tạo kiện.")) }
 
-            if session.status == "OPEN" {
+            if session.status == "OPEN" && !closedNow {
                 Section {
                     NavigationLink {
                         AutoScanView(session: ReceivingSession(id: session.id, carrierName: carrierName, driverName: session.driverName,
@@ -242,6 +247,16 @@ struct CompanyTrackingsView: View {
                         Label(tr("Quét vào phiên này"), systemImage: "viewfinder").foregroundStyle(Color.accent)
                     }
                 } footer: { Text(tr("Mỗi kiện quét ở đây là kiện THẬT trên công ty, không xoá được. Lần đầu chỉ quét 1 kiện rồi đối chiếu với web.")) }
+
+                Section {
+                    Button(role: .destructive) { confirmClose = true } label: {
+                        HStack {
+                            Label(tr("Kết thúc phiên"), systemImage: "checkmark.seal")
+                            if closing { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(closing)
+                } footer: { Text(tr("Đóng phiên trên công ty: không quét thêm vào phiên này được.")) }
             }
 
             Section(tr("Kiện trong phiên")) {
@@ -280,6 +295,29 @@ struct CompanyTrackingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if items.isEmpty { await reload() } }
         .refreshable { await reload() }
+        .alert(tr("Kết thúc phiên?"), isPresented: $confirmClose) {
+            Button(tr("Huỷ"), role: .cancel) {}
+            Button(tr("Kết thúc phiên"), role: .destructive) { Task { await closeSession() } }
+        } message: { Text(tr("Phiên #{0} sẽ được đóng trên công ty, không quét thêm vào phiên này được. Đã quét {1} kiện.", session.id, session.actualScannedCount ?? items.count)) }
+        .alert(tr("Không đóng được phiên"), isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(closeError ?? "") }
+    }
+
+    /// GHI lên công ty: đóng phiên (PATCH status=CLOSED). Xong thì quay về danh sách phiên (danh sách tự tải lại).
+    private func closeSession() async {
+        guard !closing else { return }
+        closing = true
+        defer { closing = false }
+        do {
+            try await CompanyAPI.shared.closeSession(id: session.id)
+            closedNow = true
+            if coSelectedId == session.id { coSelectedId = 0; coSelectedLabel = "" }      // phiên đã đóng thì bỏ chọn
+            Haptics.success()
+            dismiss()
+        } catch {
+            closeError = error.localizedDescription
+        }
     }
 
     private func checkStatusText(_ s: String) -> String {
