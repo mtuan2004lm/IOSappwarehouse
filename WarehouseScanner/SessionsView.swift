@@ -131,13 +131,13 @@ struct SessionsView: View {
 
 // MARK: - Kiện của phiên công ty (chỉ đọc)
 
-/// "Khớp" + tên hàng/đơn đã liên kết (nếu có), vd "Khớp · Kem chống nắng Anessa Perfect UV 60ml (đơn 990001)".
+/// Tên hàng/đơn đã liên kết, vd "Kem chống nắng Anessa Perfect UV 60ml (đơn 990001)"; chưa có tên thì ghi "Khớp".
 private func coMatchedText(_ t: CompanyTracking) -> String {
     let names = t.orderItems.compactMap { it -> String? in
         guard let n = it.itemName ?? it.itemId else { return nil }
         return it.clientOrderId.map { "\(n) (\(tr("đơn")) \($0))" } ?? n
     }
-    return names.isEmpty ? tr("Khớp") : tr("Khớp") + " · " + names.joined(separator: ", ")
+    return names.isEmpty ? tr("Khớp") : names.joined(separator: ", ")
 }
 
 private func coFormatTime(_ iso: String?) -> String {
@@ -239,7 +239,7 @@ struct CompanyTrackingsView: View {
                                                                scannedCount: session.actualScannedCount ?? 0),
                                      company: CompanyScanTarget(sessionId: session.id, carrierId: session.carrierId))
                     } label: {
-                        Label(tr("Quét vào phiên này (ghi lên công ty)"), systemImage: "viewfinder").foregroundStyle(Color.accent)
+                        Label(tr("Quét vào phiên này"), systemImage: "viewfinder").foregroundStyle(Color.accent)
                     }
                 } footer: { Text(tr("Mỗi kiện quét ở đây là kiện THẬT trên công ty, không xoá được. Lần đầu chỉ quét 1 kiện rồi đối chiếu với web.")) }
             }

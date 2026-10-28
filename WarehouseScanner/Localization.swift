@@ -120,7 +120,7 @@ enum L10n {
         "Phiên này chưa có kiện nào.": "This session has no packages yet.",
         "Phiên đang mở": "Open sessions",
         "Quyết định": "Decision",
-        "Quét vào phiên này (ghi lên công ty)": "Scan into this session (writes to the company)",
+        "Quét vào phiên này": "Scan into this session",
         "Sẽ ghi một phiên thật lên apiwh-dev và không xoá được.": "This will write a real session to apiwh-dev and cannot be deleted.",
         "Số dòng hàng": "Item lines",
         "Số kiện hãng khai": "Packages declared by carrier",

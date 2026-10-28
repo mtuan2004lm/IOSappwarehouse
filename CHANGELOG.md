@@ -9,6 +9,26 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-28 · ⭐ 🔥 📱 Chuẩn bị phát hành: đổi Bundle ID và Team theo tài khoản công ty
+- Bundle ID `com.tina.warehousescanner` → **`com.wh.internal`** (khớp app đã tạo sẵn trên App Store Connect: tên "WH Scanner 3PL", SKU WH-SCANNER-IOS-001, Apple ID 6825729096).
+- Team (`DEVELOPMENT_TEAM`) `XJV6B4PX32` → **`4A2CPW6M9J`** (manager gửi). Sửa ở `project.pbxproj` (Debug + Release) và `project.yml`.
+- Ký app: để Automatic; cần Apple ID của người build được mời vào team 4A2CPW6M9J (hoặc có khóa riêng của chứng chỉ .cer) — CHƯA xác nhận.
+- Tên dưới icon vẫn "Warehouse Tina" (không bắt buộc khớp tên trên App Store).
+- 📱 Sau khi đổi, app cài trên máy là app MỚI (Bundle ID khác): xoá bản cũ, đăng nhập lại. Cần Clean Build Folder.
+
+### 2026-10-28 · 📱 Nút quét: bỏ chữ "(ghi lên công ty)"
+- Nút trong màn chi tiết phiên: "Quét vào phiên này (ghi lên công ty)" → "Quét vào phiên này" (EN "Scan into this session"). Dòng chú thích bên dưới (kiện quét là kiện THẬT, không xoá được) giữ nguyên. Sửa `SessionsView.swift`, `Localization.swift`.
+
+### 2026-10-28 · 📱 Chi tiết kiện: bỏ chữ "Khớp ·" ở dòng Khớp đơn
+- Dòng "Khớp đơn" chỉ hiện tên hàng và mã đơn, vd "Kem chống nắng Anessa Perfect UV 60ml (đơn 990001)". Chỉ khi công ty chưa trả tên hàng mới ghi "Khớp". Sửa `SessionsView.swift` (`coMatchedText`).
+
+### 2026-10-27 · ⭐ 🔥 📱 Quét: mã còn lại trên tem luôn được gửi kèm làm mã phụ
+- Trước: tracking đầu tiên công ty có (FOUND) → ghi kiện chỉ với các mã đã "ting" trước đó; các mã khác cùng nằm trên tem bị bỏ qua (không gửi làm mã phụ).
+- Nay: khi một mã FOUND, `additionalTrackingNumbers` = mã đã ting + mọi mã khác cùng thấy trong khung (đã cắt qua `TrackingCutter`, bỏ trùng với mã chính và các mã ứng viên của nó). Mã chính vẫn là mã công ty biết (FOUND).
+- Sửa `AutoScanViewModel.swift` (nhánh FOUND của `sendCompany`) và chú thích.
+- 🧪 Cần thử: tem 3 mã vạch, mã đầu có trong danh sách → trên web kiện phải có 2 mã phụ; thẻ kết quả ghi "+2 mã phụ".
+- Lưu ý: công ty không cho xoá/sửa kiện đã ghi, nên thử trên tem thật trong phiên thử.
+
 ### 2026-10-27 · ⭐ 🔥 📱 Chi tiết kiện: "Khớp đơn" hiện tên hàng như web (sửa lỗi vẫn báo NO_NAME)
 - Nguyên nhân: app gọi `GET /trackings` và `GET /trackings/{id}` KHÔNG kèm `include`, nên công ty không trả `orderItems` (chỉ trả `orderItemCount`); web gọi kèm `include=orderItems,holdCaseItems…`. Vì vậy app tưởng kiện chưa có dòng hàng và ghi thô "NO_NAME" (bản 14:12 của kiện TBA334169588754).
 - Sửa: cả danh sách và chi tiết kiện gọi kèm `include=orderItems,holdCaseItems`; nếu công ty từ chối tham số này thì tự gọi lại như cũ (không vỡ màn hình). Thêm `hasOrderLines` (dựa `orderItemCount` hoặc `orderItems`) dùng cho `isUnknown`.

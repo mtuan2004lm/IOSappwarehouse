@@ -289,7 +289,7 @@ final class AutoScanViewModel: ObservableObject {
     }
 
     /// Gửi MỘT tracking. `extras` = các mã khác cùng thấy trên tem: nếu tracking này "ting" (chưa có thông tin) thì gửi tiếp
-    /// mã kế tiếp theo thứ tự (tracking 2, 3); nếu đã "yes" hoặc NO NAME thì bỏ qua các mã còn lại (cùng một kiện).
+    /// mã kế tiếp theo thứ tự (tracking 2, 3); nếu đã "yes" thì các mã còn lại cùng tem được gửi kèm làm mã phụ (cùng một kiện).
     private func send(code: String, text: String, group: String, extras: [String] = []) async {
         await sendCompany(company, code: code, text: text, group: group, extras: extras)
     }
@@ -354,9 +354,15 @@ final class AutoScanViewModel: ObservableObject {
                 last = LastResult(barcode: value, group: nil, warehouseText: nil, message: tr("Mã đã quét trong phiên"), duplicate: true)
                 Haptics.warning(); AudioServicesPlaySystemSound(1053)
             case "FOUND":
-                let r = try await CompanyAPI.shared.scan(trackingNumber: value, additional: coPending, carrierId: co.carrierId,
+                // Mã phụ = các mã đã báo chưa có thông tin (ting) + các mã khác cùng nằm trên tem chưa được hỏi (extras), bỏ trùng
+                var additional = coPending
+                for x in extras {
+                    let p = TrackingCutter.candidates(x).primary
+                    if p != value, !cut.list.contains(p), !additional.contains(p) { additional.append(p) }
+                }
+                let r = try await CompanyAPI.shared.scan(trackingNumber: value, additional: additional, carrierId: co.carrierId,
                                                          customerCode: customer, sessionId: co.sessionId)
-                let usedPending = coPending.count
+                let usedPending = additional.count
                 coPending = []; pendingTracks = 0; endRequired = false
                 if r.checkIn == "DUPLICATE" {
                     skipped += 1
