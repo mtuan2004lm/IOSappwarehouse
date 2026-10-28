@@ -9,6 +9,11 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-28 · ⭐ 🔥 📱 Danh sách phiên: hiện lại "người mở phiên" và trạm
+- ⭐ Lỗi: danh sách phiên **không có dòng "mở bởi …" và trạm** vì `GET /receiving-sessions` chỉ trả `userId`/`stationId`; muốn kèm người mở phiên, trạm, hãng phải gửi `include=user,station,carrier` (Swagger ghi rõ "Present only when ?include=user was requested"; cấu trúc `user {id, username, fullName}`, `station`/`carrier {id, code, name}` khớp với model trong app). App chưa bao giờ gửi tham số này (hãng thì tra thêm bằng danh sách hãng nên vẫn hiện).
+- `CompanyAPI.sessions(...)` và `CompanyAPI.session(id:)` nay gửi `include=user,station,carrier`; máy chủ từ chối thì tự gọi lại như cũ (không làm hỏng danh sách).
+- 🔥 Chưa thử trên máy: tên người mở phiên hiện đúng không (dùng `fullName`, không có thì `username`).
+
 ### 2026-10-28 · ⭐ 🔥 📱 Chi tiết phiên: tiêu đề "Phiên #N" to hơn, đánh số thứ tự, kiện quét đầu tiên lên trên
 - Tiêu đề "Phiên #17" trên thanh trên cùng: chữ **26pt đậm** (trước là cỡ mặc định nhỏ), đặt bằng `ToolbarItem(.principal)`.
 - ⭐ Danh sách kiện nay sắp **kiện quét đầu tiên ở trên cùng** (theo ý bạn): `CompanyAPI.trackings` gửi `sort=checkedInAt&order=asc` (Swagger `GET /trackings`; mặc định máy chủ là `createdAt` giảm dần), nên sắp đúng cả khi phiên có nhiều trang (tải thêm 30 kiện/lần). Mỗi kiện có **số thứ tự theo lúc quét**: 1 = kiện quét đầu tiên (dòng trên cùng), tăng dần xuống dưới; `rowNumber` = vị trí dòng. Số nằm **giữa ô theo chiều dọc** ở bên trái, chữ to hơn (`title3` đậm). ⭐ **Mỗi thông tin một dòng** trong từng kiện (trước đó nhãn "Kiện không xác định" và dòng chữ xám nằm chung một hàng nên bị ngắt dòng xấu): dòng 1 mã tracking · dòng 2 "khách …" và "kệ …" (chỉ khi có) · dòng 3 trạng thái + giờ nhập (vd "Đã nhập · 26/10 15:20") · **dòng cuối** nhãn "Kiện không xác định"/"HƯ HỎNG" (chỉ khi có; theo ý bạn để ở cuối). Số này chỉ để đếm trên màn hình, không phải mã của hệ thống. 🔥 Chưa thử trên máy: máy chủ nhận `sort`/`order` đúng như Swagger không (nếu lỗi thì danh sách kiện báo lỗi).

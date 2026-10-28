@@ -387,7 +387,9 @@ actor CompanyAPI {
 
     /// Một phiên theo id (kèm `actualScannedCount` tính sẵn).
     func session(id: Int) async throws -> CompanySession {
-        try await request(CompanyEnvelope<CompanySession>.self, "GET", "/receiving-sessions/\(id)").data
+        if let r = try? await request(CompanyEnvelope<CompanySession>.self, "GET", "/receiving-sessions/\(id)",
+                                      query: [URLQueryItem(name: "include", value: "user,station,carrier")]) { return r.data }
+        return try await request(CompanyEnvelope<CompanySession>.self, "GET", "/receiving-sessions/\(id)").data
     }
 
     /// Danh sách phiên, lọc ở máy chủ giống web: trạng thái (OPEN | CLOSED), hãng, cửa (`dockGate`, khớp đúng),
@@ -400,6 +402,10 @@ actor CompanyAPI {
         let iso = ISO8601DateFormatter()
         if let arrivedFrom { q.append(URLQueryItem(name: "openedFrom", value: iso.string(from: arrivedFrom))) }
         if let arrivedTo { q.append(URLQueryItem(name: "openedTo", value: iso.string(from: arrivedTo))) }
+        // Swagger: include=user,station,carrier nhúng sẵn người mở phiên, trạm và hãng (không gửi thì các trường này trống,
+        // danh sách sẽ thiếu dòng "mở bởi …" và trạm). Máy chủ từ chối include thì gọi lại như cũ.
+        if let r = try? await request(CompanyList<CompanySession>.self, "GET", "/receiving-sessions",
+                                      query: q + [URLQueryItem(name: "include", value: "user,station,carrier")]) { return r.data }
         return try await request(CompanyList<CompanySession>.self, "GET", "/receiving-sessions", query: q).data
     }
 
