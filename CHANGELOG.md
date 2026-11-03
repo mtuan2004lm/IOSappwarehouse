@@ -9,6 +9,51 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-11-03 · ⭐ 🔥 📱 Sửa lỗi OCR: "HNHUF MCF" phải là "HNHUE MCF"
+- Lỗi: tem `HNHUE MCF` bị OCR đọc thành `HNHUF MCF` (E → F); quy tắc MICAFI (`MCF$`) vẫn khớp nên app gửi lên công ty nguyên chữ sai, web hiện "HNHUF MCF".
+- Sửa: `RuleMatcher.normalizeOCR` thêm chuẩn hoá `^((HN|SG) ?HU|FD ?VAT ?HU)F\b` → `…E` (HNHUF MCF → HNHUE MCF, SGHUF DOFA → SGHUE DOFA, FD VAT HUF → FD VAT HUE). Đặt **trước** các sửa lỗi DOFA168 để "SG HUF DOFA16&" cũng được sửa tiếp. Đã thử mẫu bằng regex ngoài Xcode; chưa chạy trên máy.
+- 🔥 Chỉ sửa đúng cặp "HUF → HUE" đã gặp. Các nhầm lẫn OCR khác (vd. 0/O, 1/I) chưa biết thì chưa sửa — gặp thêm thì báo để thêm. Kiện **đã ghi** (dòng STT 20 trên web) không tự đổi; sửa trên web bằng nút ✎.
+
+### 2026-11-03 · ⭐ 🔥 📱 Ô gõ/dán mã: nhấn Enter là ghi luôn (giống ô nhập tay trên web)
+- Theo yêu cầu "giống chỗ nhập tay trên web": gõ/dán mã rồi **Enter** → app xử lý như một lần quét, **không còn nút "Ghi lên hệ thống" và hộp xác nhận** cho mã có trong đơn:
+  - Công ty có mã (`FOUND`) → ghi ngay (`POST /trackings/scan`); báo "Đã ghi: …", âm "yes"; nếu kiện bị block → báo đỏ ĐANG BLOCK (+ dấu hiệu) và âm block.
+  - Đã có trong danh sách / `DUPLICATE` → báo "Đã có trong danh sách đã quét", âm "mã trùng", không ghi.
+  - Không có trong đơn (`NOT_FOUND`) → âm "ting"; **vẫn phải bấm nút "Ghi thành kiện NO NAME" (có hộp xác nhận)** để tránh ghi nhầm kiện NO NAME vì gõ sai mã (kiện ghi lên công ty không xoá được).
+- Sửa lỗi nhỏ của bản trước: ô nhập bị xoá sau khi ghi làm mất dòng kết quả "Đã ghi…"; nay chỉ xoá kết quả khi bạn gõ mã mới. Chống Enter hai lần (đang kiểm tra/đang ghi thì bỏ qua).
+- Code: `runCheck()`/`writeCode()`/`onChange` và `writeBlocks` trong `CompanyTrackingsView` (`SessionsView.swift`); `Localization.swift` đổi câu hướng dẫn dưới ô.
+- 🔥 Chưa thử trên máy; ghi tay vẫn một mã/lần, không kèm mã kho.
+
+### 2026-11-03 · ⭐ 🔥 📱 Báo "BLOCK" trên app (kiện đang bị block trên công ty)
+- Trước đây app **không biết block** (chỉ đọc `status` FOUND/NOT_FOUND/DUPLICATE nên kiện đang block trên web vẫn hiện "Công ty có mã này trong đơn hàng" / SUCCESS).
+- Nay app dò dấu hiệu block trong phản hồi của công ty: `CompanyJSON.blockHints()` lấy mọi khoá có chữ "block" mà giá trị có nghĩa (không null/false/rỗng/0), hoặc trạng thái có chữ BLOCK. Áp dụng cho `check-tracking-scan` và `trackings/scan`.
+  - **Quét:** kiện FOUND mà công ty báo block → thẻ **đỏ "BLOCK"** ("Kiện đang bị block — chưa nhận hàng" + dấu hiệu tìm thấy) thay cho SUCCESS, rung lỗi, phát âm mới **"Kiện đang bị block"** (mặc định giọng đọc "Block"; đổi được ở Cài đặt > Âm thanh khi quét); lịch sử quét ghi thêm "· ĐANG BLOCK". Kiện vẫn được ghi vào phiên như cũ (công ty quyết định).
+  - **Ô gõ/dán mã:** hiện cảnh báo đỏ **ĐANG BLOCK** + dấu hiệu, hộp xác nhận ghi có thêm dòng "Kiện đang bị block."; sau khi ghi mà bị block thì phát âm block.
+  - **Mục "Chi tiết từ công ty"** (ô gõ/dán mã): hiện nguyên phản hồi của công ty để đối chiếu trường block.
+- 🔥 **Tên trường block thật của công ty CHƯA xác minh** (không gọi được API từ sandbox): app đang dò theo tên chứa "block". Nếu app không báo được thì mở "Chi tiết từ công ty" (kiểm tra mã TEST-BLK-…), gửi JSON để đặt đúng tên trường; trạng thái "Đang giữ" (ON_HOLD) hiện KHÔNG bị coi là block. Chưa quyết định có chặn ghi kiện block hay không.
+- Code: `APIClient.swift` (`blockHints`, `checkTracking`/`scan` trả thêm `blocks`), `AutoScanViewModel.swift` (`LastResult.blocked`, nhánh FOUND), `AutoScanView.swift` (thẻ BLOCK), `SessionsView.swift` (ô gõ mã), `SettingsView.swift` (`ScanSound.block`), `Localization.swift` (+5 câu EN).
+
+### 2026-11-03 · ⭐ 🔥 📱 Ô gõ/dán mã tracking trong chi tiết phiên: GHI được lên công ty
+- Trước đây ô **"Gõ hoặc dán mã tracking"** chỉ để xem mã đã có trong danh sách đã quét chưa. Nay (phiên đang mở) sau khi kiểm tra có thêm nút ghi, như một lần quét:
+  - Công ty **có** mã trong đơn (`FOUND`) → nút **Ghi lên hệ thống**.
+  - Công ty **không có** mã (`NOT_FOUND`) → nút **Ghi thành kiện NO NAME**.
+  - Đã có trong danh sách đã quét / `DUPLICATE` → chỉ báo "Đã có trong danh sách đã quét", không ghi.
+- Bấm nút → hỏi xác nhận ("không xoá được") → `POST /trackings/scan` (mã đã cắt theo hãng như lúc quét, không kèm mã kho) → báo "Đã ghi: …", số đã quét và danh sách kiện tự tải lại, ô nhập được xoá.
+- Kiểm tra nay hỏi **song song** mọi mã ứng viên (như lúc quét) thay vì tối đa 4 mã lần lượt.
+- Code: `runCheck()` (trạng thái `checkState`: LISTED/DUPLICATE/FOUND/NOT_FOUND + `checkValue`), `writeCode()`, `canWriteCode` trong `CompanyTrackingsView` (`SessionsView.swift`); `Localization.swift` thêm 10 câu EN.
+- 🔥 Chưa thử trên máy / công ty: mã gõ tay **một mã mỗi lần** (chưa nhập được nhiều mã/tem để gộp mã phụ, chưa có mã kho); mất mạng thì báo lỗi, **không** tự xếp hàng gửi lại như lúc quét. Phiên đã đóng thì ô này vẫn chỉ để kiểm tra.
+
+### 2026-11-03 · ⭐ 🔥 📱 Âm thanh: thêm giọng đọc "Block", mặc định cho "Công ty từ chối / lỗi"
+- Thêm lựa chọn âm **Giọng đọc "Block"** (giọng máy đọc chữ "Block", ~0,5 giây) vào menu âm của mọi trạng thái trong Cài đặt > Âm thanh khi quét. **Mặc định của "Công ty từ chối / lỗi" đổi từ âm 1053 sang giọng đọc "Block"** (theo yêu cầu thay âm 1033 đang chọn).
+- File âm **nhúng thẳng trong code** (m4a 5,8 KB mã hoá base64 trong `SettingsView.swift`, phát bằng `AVAudioPlayer(data:)`) nên **không phải thêm file vào Xcode, không đụng `project.pbxproj`**.
+- 🔥 Khoá lưu âm của "từ chối/lỗi" đổi thành `snd_rejected2` để mọi máy (kể cả máy đã chọn âm 1033) nhận mặc định mới; muốn dùng lại âm cũ thì chọn lại trong Cài đặt. Giọng đọc được tạo bằng espeak-ng (giọng máy, chưa tự nhiên); muốn giọng đẹp hơn thì gửi file thu sẵn để thay (cần thêm file vào Xcode hoặc mã hoá lại thành base64).
+- 🔥 Chưa thử trên máy: `AVAudioPlayer` có tuân theo công tắc im lặng/âm lượng chuông như âm hệ thống không (mặc định phiên âm thanh "solo ambient" thì có).
+
+### 2026-11-03 · ⭐ 📱 Cài đặt: chọn âm thanh cho từng trạng thái quét
+- Cài đặt (⚙︎) có mục **Âm thanh khi quét**: chọn âm hệ thống iPhone cho 7 trạng thái — Có trong đơn hàng (yes), Chưa có thông tin (ting), Kiện NO NAME, Mã trùng, Bắt buộc bấm END CODE, Thiếu mã kho, Công ty từ chối/lỗi. Mỗi dòng có menu chọn "Âm xxxx" (hoặc **Tắt**), chọn xong tự phát thử, có nút loa để nghe lại; nút **Khôi phục âm mặc định**.
+- Mặc định giữ như cũ: yes 1057 · ting/NO NAME 1103 · trùng/chặn END CODE/thiếu mã kho 1053; **mới:** lỗi từ chối 1053 (trước chỉ rung, không có âm). Lưu theo máy (`UserDefaults`, khoá `snd_<trạng thái>`).
+- Code: `enum ScanSound` + `SoundRow` cuối `SettingsView.swift`; `AutoScanViewModel.swift` thay các `AudioServicesPlaySystemSound(…)` cố định bằng `ScanSound.<trạng thái>.play()`; `Localization.swift` thêm 12 câu EN.
+- 🔥 Chưa thử trên máy: một số số hiệu âm hệ thống không nghe thấy trên mọi iPhone (nghe thử rồi chọn); chế độ im lặng/âm lượng chuông của iPhone vẫn quyết định có nghe được hay không. Chưa dùng được file âm thanh riêng của web (cách 1).
+
 ### 2026-11-02 · ⭐ 🔥 📱 Màn quét: nút "Chọn mã chính" trong các mã không có trong đơn hàng
 - Khi tem có tracking "ting" (công ty không có mã trong danh sách đơn), dưới nút END CODE hiện thêm nút **Chọn mã chính (n mã không có trong đơn)**. Bấm → dừng camera, mở bảng liệt kê các mã đã quét mà công ty không có (tối đa 3); **tick 1 trong các mã** (chỉ chọn được 1) → bấm **Chốt kiện** → mã tick thành **mã chính**, các mã còn lại thành **mã phụ**, ghi kiện **NO NAME** lên công ty (cùng luồng END CODE, chỉ khác là người quét tự chọn mã chính thay vì mặc định mã quét đầu). Đóng bảng thì camera tự quét lại.
 - Nút END CODE cũ giữ nguyên (mã đầu làm mã chính).

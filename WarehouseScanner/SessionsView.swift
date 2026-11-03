@@ -293,7 +293,14 @@ struct CompanyTrackingsView: View {
     @State private var checkCode = ""
     @State private var copiedId: String?           // kiện vừa sao chép mã (hiện dấu ✓ trong 1,5 giây)
     @State private var checking = false
-    @State private var checkFound: Bool?           // nil = chưa kiểm tra; true = đã có trong danh sách đã quét
+    @State private var checkState: String?         // nil = chưa kiểm tra; LISTED/DUPLICATE = đã quét rồi; FOUND = công ty có trong đơn; NOT_FOUND = không có trong đơn
+    @State private var checkValue = ""             // mã (đã cắt) sẽ ghi lên công ty
+    @State private var checkBlocks: [String] = []  // dấu hiệu "đang block" công ty trả kèm
+    @State private var checkDetail = ""            // phản hồi gốc của công ty (để xem khi cần)
+    @State private var writeBlocks: [String] = []  // dấu hiệu block của kiện vừa ghi
+    @State private var confirmWrite = false
+    @State private var writing = false
+    @State private var writeResult: String?
     @State private var checkError: String?
     @State private var confirmClose = false        // hỏi xác nhận trước khi đóng phiên trên công ty
     @State private var closing = false
@@ -339,7 +346,7 @@ struct CompanyTrackingsView: View {
                 .padding(.vertical, 8)
             }
 
-            // Một ô quét/gõ mã: có trong danh sách đã quét thì báo
+            // Một ô gõ/dán mã: kiểm tra mã, rồi (phiên đang mở) GHI lên công ty như khi quét
             Section {
                 TextField(tr("Gõ hoặc dán mã tracking"), text: $checkCode)
                     .textInputAutocapitalization(.characters)
@@ -347,20 +354,52 @@ struct CompanyTrackingsView: View {
                     .font(.body.monospaced())
                     .submitLabel(.search)
                     .onSubmit { Task { await runCheck() } }
-                    .onChange(of: checkCode) { _ in checkFound = nil; checkError = nil }
-                if checking {
+                    .onChange(of: checkCode) { v in
+                        if !v.isEmpty { checkState = nil; checkError = nil; writeResult = nil; writeBlocks = []; checkBlocks = []; checkDetail = "" }   // ô được xoá sau khi ghi thì giữ kết quả
+                    }
+                if checking || writing {
                     HStack { Spacer(); ProgressView(); Spacer() }
                 } else if let checkError {
                     Label(checkError, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent)
-                } else if let checkFound {
-                    if checkFound {
+                } else if let st = checkState {
+                    if !checkBlocks.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(tr("ĐANG BLOCK"), systemImage: "lock.fill").font(.headline).foregroundStyle(Color.dupRed)
+                            Text(checkBlocks.joined(separator: "\n")).font(.caption.monospaced()).foregroundStyle(Color.dupRed)
+                        }
+                    }
+                    if st == "LISTED" || st == "DUPLICATE" {
                         Label(tr("Đã có trong danh sách đã quét"), systemImage: "checkmark.circle.fill")
                             .font(.headline).foregroundStyle(Color.okGreen)
+                    } else if st == "FOUND" {
+                        Label(tr("Công ty có mã này trong đơn hàng"), systemImage: "checkmark.circle.fill")
+                            .font(.headline).foregroundStyle(Color.okGreen)
                     } else {
-                        Label(tr("Chưa có trong danh sách đã quét"), systemImage: "xmark.circle")
-                            .foregroundStyle(.secondary)
+                        Label(tr("Mã không có trong đơn hàng"), systemImage: "questionmark.circle")
+                            .font(.headline).foregroundStyle(Color.accent)
+                        if canWriteCode {
+                            Button { confirmWrite = true } label: {
+                                HStack { Spacer(); Text(tr("Ghi thành kiện NO NAME")).font(.headline); Spacer() }.frame(minHeight: 44)
+                            }
+                            .buttonStyle(.borderedProminent).tint(.accent)
+                        }
                     }
                 }
+                if let writeResult {
+                    Label(writeResult, systemImage: writeBlocks.isEmpty ? "checkmark.seal.fill" : "lock.fill")
+                        .font(.headline).foregroundStyle(writeBlocks.isEmpty ? Color.okGreen : Color.dupRed)
+                    if !writeBlocks.isEmpty {
+                        Text(writeBlocks.joined(separator: "\n")).font(.caption.monospaced()).foregroundStyle(Color.dupRed)
+                    }
+                }
+                if !checkDetail.isEmpty {
+                    DisclosureGroup(tr("Chi tiết từ công ty")) {
+                        Text(checkDetail).font(.caption.monospaced()).textSelection(.enabled)
+                    }
+                    .font(.footnote)
+                }
+            } footer: {
+                if canWriteCode { Text(tr("Gõ hoặc dán mã rồi nhấn Enter: mã có trong đơn được ghi ngay như khi quét (không có mã kho). Mã không có trong đơn thì bấm nút Ghi thành kiện NO NAME.")) }
             }
 
             if current.status == "OPEN" && !closedNow {
@@ -463,6 +502,12 @@ struct CompanyTrackingsView: View {
         }
         .onAppear { Task { await refreshAll() } }      // quay lại từ màn quét thì số đã quét và danh sách kiện được tải lại
         .refreshable { await refreshAll() }
+        .alert(tr("Ghi mã này lên công ty?"), isPresented: $confirmWrite) {
+            Button(tr("Huỷ"), role: .cancel) {}
+            Button(tr("Ghi")) { Task { await writeCode() } }
+        } message: {
+            Text(writeMessage)
+        }
         .alert(tr("Kết thúc phiên?"), isPresented: $confirmClose) {
             Button(tr("Huỷ"), role: .cancel) {}
             Button(tr("Kết thúc phiên"), role: .destructive) { Task { await closeSession() } }
@@ -487,26 +532,82 @@ struct CompanyTrackingsView: View {
         }
     }
 
-    /// Mã đã nằm trong danh sách đã quét chưa: tìm trong các kiện đã tải của phiên, nếu chưa thấy thì hỏi công ty (DUPLICATE = đã quét rồi).
+    /// Nội dung hộp xác nhận ghi mã gõ tay.
+    private var writeMessage: String {
+        var m = checkBlocks.isEmpty ? "" : tr("Kiện đang bị block.") + "\n"
+        if checkState == "FOUND" { m += tr("{0}\nKiện được ghi vào phiên #{1} và không xoá được.", checkValue, session.id) }
+        else { m += tr("{0}\nMã không có trong đơn hàng. Sẽ ghi thành kiện NO NAME và không xoá được.", checkValue) }
+        return m
+    }
+
+    /// Phiên còn mở thì được ghi mã gõ tay lên công ty.
+    private var canWriteCode: Bool { current.status == "OPEN" && !closedNow }
+
+    /// Kiểm tra mã: đã nằm trong danh sách đã quét chưa; nếu chưa thì hỏi công ty (DUPLICATE = đã quét rồi, FOUND = có trong đơn, NOT_FOUND = không có).
     private func runCheck() async {
         let code = TrackingCutter.normalize(checkCode)
-        guard !code.isEmpty else { return }
-        checking = true; checkError = nil
+        guard !code.isEmpty, !checking, !writing else { return }        // chống nhấn Enter hai lần
+        checking = true; checkError = nil; writeResult = nil; writeBlocks = []; checkBlocks = []; checkDetail = ""
         defer { checking = false }
-        let cands = TrackingCutter.candidates(code).list
+        let cut = TrackingCutter.candidates(code)
+        let cands = cut.list
         let set = Set(cands)
         if items.contains(where: { t in
             set.contains(TrackingCutter.normalize(t.trackingNumber)) ||
             t.additionalTrackingNumbers.contains { set.contains(TrackingCutter.normalize($0)) }
-        }) { checkFound = true; Haptics.success(); return }
+        }) { checkState = "LISTED"; Haptics.warning(); ScanSound.duplicate.play(); return }
         do {
-            for c in cands.prefix(4) {
-                let r = try await CompanyAPI.shared.checkTracking(code: c)
-                if r.status == "DUPLICATE" { checkFound = true; Haptics.success(); return }
+            // Hỏi song song tất cả mã ứng viên (giống lúc quét), lấy mã đứng trước có FOUND hoặc DUPLICATE
+            var results: [Int: (status: String, detail: String, blocks: [String])] = [:]
+            try await withThrowingTaskGroup(of: (Int, String, String, [String]).self) { group in
+                for (i, c) in cands.enumerated() {
+                    group.addTask { let r = try await CompanyAPI.shared.checkTracking(code: c); return (i, r.status, r.detail, r.blocks) }
+                }
+                for try await (i, st, d, b) in group { results[i] = (st, d, b) }
             }
-            checkFound = false
+            for i in cands.indices {
+                guard let r = results[i], r.status == "FOUND" || r.status == "DUPLICATE" else { continue }
+                let st = r.status
+                checkState = st; checkValue = cands[i]; checkBlocks = r.blocks; checkDetail = r.detail
+                if st == "DUPLICATE" {
+                    Haptics.warning(); ScanSound.duplicate.play()
+                } else if canWriteCode {
+                    checking = false
+                    await writeCode()          // giống web: nhấn Enter là ghi luôn (như một lần quét)
+                }
+                return
+            }
+            checkState = "NOT_FOUND"; checkValue = cut.primary
+            Haptics.warning(); ScanSound.ting.play()
         } catch {
-            checkFound = nil; checkError = error.localizedDescription
+            checkState = nil; checkError = error.localizedDescription
+        }
+    }
+
+    /// GHI lên công ty: ghi mã gõ tay như một lần quét (POST /trackings/scan, không có mã kho). Mã không có trong đơn thành kiện NO NAME.
+    private func writeCode() async {
+        guard !writing, canWriteCode, let st = checkState, st == "FOUND" || st == "NOT_FOUND", !checkValue.isEmpty else { return }
+        writing = true; checkError = nil
+        defer { writing = false }
+        do {
+            let r = try await CompanyAPI.shared.scan(trackingNumber: checkValue, additional: [], carrierId: session.carrierId,
+                                                     customerCode: "", sessionId: session.id)
+            if r.checkIn == "DUPLICATE" {
+                checkState = "DUPLICATE"; Haptics.warning()
+                return
+            }
+            let note = (r.matchStatus == "NO_NAME" ? tr("Đã ghi kiện NO NAME") : tr("Đã ghi: {0}", r.matchStatus))
+                + (r.blocks.isEmpty ? "" : " · " + tr("ĐANG BLOCK"))
+            let blocks = Array(Set(checkBlocks + r.blocks)).sorted()
+            checkCode = ""
+            checkState = nil; checkBlocks = []; checkDetail = ""
+            writeBlocks = blocks
+            writeResult = note
+            if !blocks.isEmpty { Haptics.error(); ScanSound.block.play() } else { Haptics.success(); ScanSound.found.play() }
+            await refreshAll()
+        } catch {
+            checkError = error.localizedDescription
+            Haptics.error()
         }
     }
 

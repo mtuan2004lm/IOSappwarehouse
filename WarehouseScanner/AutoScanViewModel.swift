@@ -27,6 +27,7 @@ struct LastResult: Equatable {
     var noName: Bool = false    // true: quét END CODE -> kiện NO NAME (tracking đầu làm tracking gốc)
     var company: Bool = false   // true: kết quả quét vào phiên công ty (hiện thẻ riêng)
     var noWarehouse: Bool = false // true: thấy mã vạch nhưng chưa đọc được mã kho -> yêu cầu đưa tem vào lại
+    var blocked: Bool = false   // true: kiện công ty báo đang BLOCK (đã ghi vào phiên nhưng cần xử lý trên web)
     var endBlocked: Bool = false // true: đã đủ 3 tracking không có thông tin mà vẫn quét tiếp -> bị chặn
 }
 
@@ -280,7 +281,7 @@ final class AutoScanViewModel: ObservableObject {
         cooldown[code] = Date().addingTimeInterval(1.5)       // đợi ~3 giây rồi mới đọc lại
         last = LastResult(barcode: code, group: nil, warehouseText: nil, message: tr("Chưa đọc được mã kho — đưa tem vào lại (chưa gửi lên công ty)"), noWarehouse: true)
         Haptics.warning()
-        AudioServicesPlaySystemSound(1053)
+        ScanSound.noWarehouse.play()
     }
 
     /// Đọc được mã kho nhưng chưa thấy mã vạch: không báo FAIL, chỉ nhắc nhẹ để đưa mã vạch vào khung.
@@ -330,7 +331,7 @@ final class AutoScanViewModel: ObservableObject {
                 let note = "NO NAME · \(r.checkIn)" + (wh.isEmpty ? tr(" · không có mã kho") : tr(" · mã kho {0}", wh))
                 entries.insert(ScanEntry(barcode: first, warehouseText: wh.isEmpty ? nil : wh, status: .noName, note: note), at: 0)
                 last = LastResult(barcode: first, group: nil, warehouseText: wh.isEmpty ? nil : wh, message: note, noName: true)
-                Haptics.warning(); AudioServicesPlaySystemSound(1103)
+                Haptics.warning(); ScanSound.noName.play()
                 return
             }
             let cut = TrackingCutter.candidates(code)
@@ -340,29 +341,31 @@ final class AutoScanViewModel: ObservableObject {
                 for x in extras { done.remove(x) }
                 endRequired = true; pendingTracks = 3
                 last = LastResult(barcode: code, group: nil, warehouseText: nil, message: tr("Bắt buộc bấm nút END CODE"), endBlocked: true)
-                Haptics.warning(); AudioServicesPlaySystemSound(1053)
+                Haptics.warning(); ScanSound.duplicate.play()
                 return
             }
             // Hỏi công ty lần lượt từng mã ứng viên; gặp FOUND / DUPLICATE thì dừng
             // Hỏi song song tất cả mã ứng viên (nhanh hơn hỏi lần lượt), rồi chọn mã đứng trước trong danh sách
             var results: [Int: String] = [:]
-            try await withThrowingTaskGroup(of: (Int, String).self) { group in
+            var blockInfo: [Int: [String]] = [:]       // dấu hiệu "đang block" công ty trả kèm theo từng mã
+            try await withThrowingTaskGroup(of: (Int, String, [String]).self) { group in
                 for (i, v) in cut.list.enumerated() {
-                    group.addTask { (i, try await CompanyAPI.shared.checkTracking(code: v).status) }
+                    group.addTask { let r = try await CompanyAPI.shared.checkTracking(code: v); return (i, r.status, r.blocks) }
                 }
-                for try await (i, st) in group { results[i] = st }
+                for try await (i, st, bl) in group { results[i] = st; blockInfo[i] = bl }
             }
             var status = "NOT_FOUND"
             var value = cut.primary
+            var checkBlocks: [String] = []
             for i in cut.list.indices {
-                if let st = results[i], st == "FOUND" || st == "DUPLICATE" { status = st; value = cut.list[i]; break }
+                if let st = results[i], st == "FOUND" || st == "DUPLICATE" { status = st; value = cut.list[i]; checkBlocks = blockInfo[i] ?? []; break }
             }
             switch status {
             case "DUPLICATE":
                 skipped += 1
                 entries.insert(ScanEntry(barcode: value, warehouseText: customer.isEmpty ? nil : customer, status: .duplicate, note: tr("Đã quét trước đó")), at: 0)
                 last = LastResult(barcode: value, group: nil, warehouseText: nil, message: tr("Mã đã quét trong phiên"), duplicate: true)
-                Haptics.warning(); AudioServicesPlaySystemSound(1053)
+                Haptics.warning(); ScanSound.blocked.play()
             case "FOUND":
                 // Mã phụ = các mã đã báo chưa có thông tin (ting) + các mã khác cùng nằm trên tem chưa được hỏi (extras), bỏ trùng
                 var additional = coPending
@@ -378,14 +381,23 @@ final class AutoScanViewModel: ObservableObject {
                     skipped += 1
                     entries.insert(ScanEntry(barcode: value, warehouseText: nil, status: .duplicate, note: tr("Đã quét trước đó")), at: 0)
                     last = LastResult(barcode: value, group: nil, warehouseText: nil, message: tr("Mã đã quét trong phiên"), duplicate: true)
-                    Haptics.warning(); AudioServicesPlaySystemSound(1053)
+                    Haptics.warning(); ScanSound.duplicate.play()
                 } else {
                     sent += 1
                     lastItem = companyItem(r.id, co, barcode: value, wh: customer, noName: r.matchStatus == "NO_NAME")
                     let note = r.matchStatus + (usedPending > 0 ? tr(" · +{0} mã phụ", usedPending) : "") + (customer.isEmpty ? tr(" · không có mã kho") : tr(" · mã kho {0}", customer))
                     entries.insert(ScanEntry(barcode: value, warehouseText: customer.isEmpty ? nil : customer, status: r.matchStatus == "NO_NAME" ? .noName : .sent, note: note), at: 0)
                     last = LastResult(barcode: value, group: nil, warehouseText: customer.isEmpty ? nil : customer, message: note, company: true)
-                    Haptics.success(); AudioServicesPlaySystemSound(1057)
+                    let blocks = Array(Set(checkBlocks + r.blocks)).sorted()
+                    if !blocks.isEmpty {
+                        // Công ty báo kiện đang BLOCK: báo to + âm riêng (không phải SUCCESS)
+                        let bn = tr("ĐANG BLOCK") + " · " + blocks.joined(separator: " · ")
+                        entries[0].note = (entries[0].note ?? "") + " · " + tr("ĐANG BLOCK")
+                        last = LastResult(barcode: value, group: nil, warehouseText: customer.isEmpty ? nil : customer, message: bn, blocked: true)
+                        Haptics.error(); ScanSound.block.play()
+                    } else {
+                        Haptics.success(); ScanSound.found.play()
+                    }
                 }
             default:    // NOT_FOUND: chưa có thông tin → "ting"
                 coPending.append(cut.primary)
@@ -398,7 +410,7 @@ final class AutoScanViewModel: ObservableObject {
                 let tried = tr("Công ty không có mã này. Đã thử: ") + cut.list.prefix(3).joined(separator: ", ")
                 entries.insert(ScanEntry(barcode: cut.primary, warehouseText: customer.isEmpty ? nil : customer, status: .tracked, note: msg + " · " + tried), at: 0)
                 last = LastResult(barcode: cut.primary, group: nil, warehouseText: nil, message: tried, track: seq)
-                Haptics.warning(); AudioServicesPlaySystemSound(1103)
+                Haptics.warning(); ScanSound.ting.play()
                 if let next = extras.first { await sendCompany(co, code: next, text: text, group: group, extras: Array(extras.dropFirst())) }
             }
         } catch let e as CompanyError {
@@ -410,7 +422,7 @@ final class AutoScanViewModel: ObservableObject {
                 skipped += 1
                 entries.insert(ScanEntry(barcode: code, warehouseText: customer, status: .rejected, note: e.localizedDescription), at: 0)
                 last = LastResult(barcode: code, group: nil, warehouseText: customer, message: e.localizedDescription)
-                Haptics.error()
+                Haptics.error(); ScanSound.rejected.play()
             }
         } catch {
             enqueue(code: code, text: text, group: group)

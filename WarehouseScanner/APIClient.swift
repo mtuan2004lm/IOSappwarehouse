@@ -208,6 +208,39 @@ enum CompanyJSON: Decodable {
         return nil
     }
     subscript(key: String) -> CompanyJSON? { if case .object(let o) = self { return o[key] }; return nil }
+
+    /// Dấu hiệu "đang block" trong phản hồi của công ty: khoá có chữ "block" mà giá trị có nghĩa (không null/false/rỗng/0),
+    /// hoặc trạng thái có chữ BLOCK (vd. "BLOCKED"). Tên trường thật của công ty chưa xác minh nên dò theo tên; trả về danh sách "khoá: giá trị".
+    func blockHints(path: String = "") -> [String] {
+        var out: [String] = []
+        switch self {
+        case .object(let o):
+            for k in o.keys.sorted() {
+                guard let v = o[k] else { continue }
+                let name = path.isEmpty ? k : path + "." + k
+                let meaningful: Bool
+                switch v {
+                case .null: meaningful = false
+                case .bool(let b): meaningful = b
+                case .number(let n): meaningful = n != 0
+                case .string(let t): meaningful = !t.isEmpty
+                case .array(let a): meaningful = !a.isEmpty
+                case .object(let d): meaningful = !d.isEmpty
+                }
+                if k.lowercased().contains("block"), meaningful {
+                    out.append(name + ": " + v.pretty().trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " "))
+                } else if case .string(let t) = v, ["status", "matchstatus", "checkinresult", "state"].contains(k.lowercased()), t.uppercased().contains("BLOCK") {
+                    out.append(name + ": " + t)
+                } else if case .object = v {
+                    out += v.blockHints(path: name)
+                } else if case .array(let a) = v {
+                    for (i, x) in a.enumerated() { out += x.blockHints(path: name + "[\(i)]") }
+                }
+            }
+        default: break
+        }
+        return out
+    }
     /// Dạng chữ nhiều dòng, dễ đọc.
     func pretty(_ indent: Int = 0) -> String {
         let pad = String(repeating: "  ", count: indent)
@@ -441,9 +474,9 @@ actor CompanyAPI {
 
     /// Hỏi công ty "mã này đã có chưa" (POST /trackings/check-tracking-scan). Tên lệnh là "check" nên không tạo kiện.
     /// Trả về (trạng thái FOUND/NOT_FOUND/DUPLICATE, phần data nguyên văn để xem).
-    func checkTracking(code: String) async throws -> (status: String, detail: String) {
+    func checkTracking(code: String) async throws -> (status: String, detail: String, blocks: [String]) {
         let r = try await request(CompanyEnvelope<CompanyJSON>.self, "POST", "/trackings/check-tracking-scan", json: ["code": code])
-        return (r.data["status"]?.stringValue ?? "?", r.data.pretty().trimmingCharacters(in: .whitespacesAndNewlines))
+        return (r.data["status"]?.stringValue ?? "?", r.data.pretty().trimmingCharacters(in: .whitespacesAndNewlines), r.data.blockHints())
     }
 
     /// GHI lên công ty: tạo phiên nhận hàng (POST /receiving-sessions). Chỉ gọi khi người dùng đã xác nhận.
@@ -466,13 +499,13 @@ actor CompanyAPI {
     }
 
     /// GHI lên công ty: quét một kiện (POST /trackings/scan). Gửi lại cùng mã thì công ty trả DUPLICATE (không tạo trùng).
-    func scan(trackingNumber: String, additional: [String], carrierId: Int, customerCode: String, sessionId: Int) async throws -> (id: String, matchStatus: String, checkIn: String) {
+    func scan(trackingNumber: String, additional: [String], carrierId: Int, customerCode: String, sessionId: Int) async throws -> (id: String, matchStatus: String, checkIn: String, blocks: [String]) {
         var body: [String: Any] = ["trackingNumber": trackingNumber, "carrierId": carrierId, "receivingSessionId": sessionId]
         if !additional.isEmpty { body["additionalTrackingNumbers"] = additional }
         if !customerCode.isEmpty { body["customerCode"] = customerCode }
         let r = try await request(CompanyEnvelope<CompanyJSON>.self, "POST", "/trackings/scan", json: body)
         let id = r.data["id"]?.stringValue ?? r.data["id"]?.intValue.map(String.init) ?? ""
-        return (id, r.data["matchStatus"]?.stringValue ?? "?", r.data["checkInResult"]?.stringValue ?? "?")
+        return (id, r.data["matchStatus"]?.stringValue ?? "?", r.data["checkInResult"]?.stringValue ?? "?", r.data.blockHints())
     }
 
     /// GHI lên công ty: ảnh label của một kiện (POST /trackings/{id}/label-photos, multipart, trường `files`).

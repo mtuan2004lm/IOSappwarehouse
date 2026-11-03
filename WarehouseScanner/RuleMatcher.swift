@@ -49,6 +49,7 @@ struct RuleMatcher {
 
 extension RuleMatcher {
     /// Sửa các lỗi OCR hay gặp trên nhãn kho trước khi khớp quy tắc:
+    ///  - "HUF" bị đọc sai thay "HUE" (HNHUF MCF → HNHUE MCF)
     ///  - bỏ tiền tố "SHIP TO" / "TO" (vd. "SHIP TO SGHUE DOFA" -> "SGHUE DOFA")
     ///  - dấu gạch dưới "_" bị đọc thành khoảng trắng/gạch ngang: "SGVO A12" -> "SGVO_A12"
     ///  - số 0 bị đọc thay chữ O trong tiền tố: "SGV0_A12" -> "SGVO_A12"
@@ -61,6 +62,8 @@ extension RuleMatcher {
         for _ in 0..<2 {
             t = t.replacingOccurrences(of: #"^((USPS|UPS|FEDEX|DHL)\s+)?(SHIP\s*TO|DELIVER(Y)?\s*TO|SHIP|TO)\s*[:\-]?\s+"#, with: "", options: .regularExpression)
         }
+        // OCR hay đọc chữ E cuối của "HUE" (Huế) thành F: "HNHUF MCF" → "HNHUE MCF", "SGHUF DOFA" → "SGHUE DOFA", "FD VAT HUF" → "FD VAT HUE"
+        t = t.replacingOccurrences(of: #"^((?:HN|SG) ?HU|FD ?VAT ?HU)F\b"#, with: "$1E", options: .regularExpression)
         t = t.replacingOccurrences(of: #"^(SGV|HNV)0"#, with: "$1O", options: .regularExpression)
         t = t.replacingOccurrences(of: #"^(SGKYDUYEN|HNKYDUYEN|SGVO|HNVO|CHHEN)[ \-]"#, with: "$1_", options: .regularExpression)
         t = t.replacingOccurrences(of: #"^(SG HUE|SG FRAGILE)[ \-]DOFA168"#, with: "$1_DOFA168", options: .regularExpression)

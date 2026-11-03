@@ -327,6 +327,16 @@ struct AutoScanView: View {
                         if let t = r.warehouseText { Text(t).font(.system(.title3, design: .monospaced).weight(.semibold)).lineLimit(1).minimumScaleFactor(0.5) }
                     }
                 }
+            } else if r.blocked {
+                // Công ty báo kiện đang BLOCK: thẻ đỏ riêng, nhắc xử lý trên web
+                card(bg: Color.dupRed) {
+                    VStack(spacing: 4) {
+                        Text("BLOCK").font(.system(size: 34, weight: .heavy))
+                        Text(tr("Kiện đang bị block — chưa nhận hàng")).font(.subheadline.bold()).multilineTextAlignment(.center)
+                        codeText(r.barcode)
+                        if let m = r.message { Text(m).font(.footnote).opacity(0.9).multilineTextAlignment(.center).lineLimit(3) }
+                    }
+                }
             } else if r.company {
                 // Quét vào phiên công ty: hiện mã kho đã gửi và kết quả công ty trả về
                 card(bg: Color.okGreen) {

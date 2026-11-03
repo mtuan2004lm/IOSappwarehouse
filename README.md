@@ -24,7 +24,7 @@ Thư mục này đã có sẵn `WarehouseScanner.xcodeproj` → bấm đúp đ�
 | `CameraEngine.swift` | Camera liên tục: barcode (AVFoundation) + OCR (Vision) |
 | `APIClient.swift` | `CompanyAPI` (đăng nhập, Keychain, làm mới token, phiên, kiện, quét, ảnh, hư hỏng) + `TrackingCutter` |
 | `AppStore.swift` | Quy tắc mã kho cài sẵn (`WarehouseRule.builtIn`) |
-| `RuleMatcher.swift` | Khớp regex mã kho + sửa lỗi OCR (`_` bị mất, `0`/`O`) |
+| `RuleMatcher.swift` | Khớp regex mã kho + sửa lỗi OCR (`_` bị mất, `0`/`O`, `HUF`→`HUE`) |
 | `Localization.swift` | Việt/Anh: hàm `tr("...")` + bảng `L10n.en` |
 
 ## Kết quả hiển thị trên màn quét
@@ -81,6 +81,12 @@ Mỗi mã vạch: hỏi công ty **song song tất cả mã ứng viên** (`chec
 - **Chọn mã chính** (nút dưới END CODE, 2/11/2026): liệt kê các mã đã quét mà công ty không có; người quét tick một mã (chỉ 1) rồi bấm Chốt kiện để làm mã chính, các mã còn lại là mã phụ, ghi kiện NO NAME (giống END CODE nhưng tự chọn mã chính). Code: `PickMainSheet`, `AutoScanViewModel.chooseMain`.
 - **END CODE** (nút trên màn quét, hoặc quét mã `ENDCODE` / `*ENDCODE*`, chỉ nhận đúng chữ `ENDCODE`): cả nhóm đang chờ không có thông tin → lấy tracking đầu làm tracking gốc, các mã còn lại là mã phụ, ghi kiện **NO NAME** (hiện "không có mã kho" nếu chưa đọc được mã kho). Không có tracking nào đang chờ thì không làm gì.
 - Cùng một tem vẫn nằm trong khung camera không bị tính lại. Mất mạng thì mã được xếp hàng và tự gửi lại; lỗi khác thì tính vào số bỏ qua.
+
+**Gõ/dán mã tay (3/11/2026):** ô "Gõ hoặc dán mã tracking" ở chi tiết phiên kiểm tra mã (danh sách đã quét + `check-tracking-scan`), và nếu phiên đang mở thì ghi được lên công ty (`POST /trackings/scan`, một mã, không mã kho): nhấn Enter, `FOUND` → ghi ngay như một lần quét (không hỏi xác nhận); `NOT_FOUND` → phải bấm nút ghi kiện NO NAME (có hỏi xác nhận). Code: `runCheck`/`writeCode` (`SessionsView.swift`).
+
+**Báo BLOCK (3/11/2026):** app dò dấu hiệu block (khoá chứa "block" có giá trị, hoặc trạng thái chứa BLOCK) trong phản hồi `check-tracking-scan` / `trackings/scan`; thấy thì hiện thẻ đỏ BLOCK, rung lỗi và phát âm block. Tên trường thật chưa xác minh (xem mục "Chi tiết từ công ty" ở ô gõ mã). Code: `CompanyJSON.blockHints`.
+
+**Âm thanh (3/11/2026):** mỗi trạng thái quét (có trong đơn, ting, NO NAME, trùng, bắt buộc END CODE, thiếu mã kho, bị từ chối, kiện block) có âm hệ thống riêng, đổi được ở Cài đặt > Âm thanh khi quét (`ScanSound` trong `SettingsView.swift`). Mặc định: yes 1057, ting/NO NAME 1103, trùng/chặn END CODE/thiếu mã kho 1053, từ chối/lỗi = giọng đọc "Block" (m4a nhúng base64 trong `SettingsView.swift`, chọn được cho mọi trạng thái).
 
 ### 3. Mã kho trên tem (`WarehouseRule.builtIn` ở `AppStore.swift`)
 Đọc chữ trên tem (OCR), chuẩn hoá rồi khớp theo thứ tự, **quy tắc đầu tiên khớp thắng**, không phân biệt hoa thường:
