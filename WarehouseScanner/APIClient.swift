@@ -499,6 +499,19 @@ actor CompanyAPI {
         _ = try await request(CompanyJSON.self, "POST", "/trackings/\(enc)/damage-report", multipart: parts)
     }
 
+    /// GHI lên công ty: SỬA báo cáo hư hỏng đã có (PATCH /trackings/{id}/damage-report, multipart, từng phần).
+    /// - typeCodes: bộ loại hư hỏng mới (thay cả bộ). - decision: chỉ gửi khi muốn đổi (nil = giữ nguyên).
+    /// - photos: ảnh mới THAY TOÀN BỘ ảnh cũ (rỗng = giữ nguyên ảnh cũ). Từ chối (REJECTED) không đảo lại được.
+    func updateDamageReport(trackingId: String, typeCodes: [String], decision: String?, photos: [Data]) async throws {
+        let enc = trackingId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trackingId
+        var parts = typeCodes.map { CompanyPart(name: "damageTypeCodes", filename: nil, mime: nil, data: Data($0.utf8)) }
+        if let decision { parts.append(CompanyPart(name: "decision", filename: nil, mime: nil, data: Data(decision.utf8))) }
+        for (i, d) in photos.enumerated() {
+            parts.append(CompanyPart(name: "files", filename: "damage\(i + 1).jpg", mime: "image/jpeg", data: d))
+        }
+        _ = try await request(CompanyJSON.self, "PATCH", "/trackings/\(enc)/damage-report", multipart: parts)
+    }
+
     // MARK: Gọi mạng chung
 
     private func request<T: Decodable>(_ type: T.Type, _ method: String, _ path: String,
@@ -595,6 +608,7 @@ struct CompanyDamageReport {
     let decision: String?          // RECEIVED | REJECTED
     let reportedAt: String?
     let typeNames: [String]
+    let typeCodes: [String]
     let photoURLs: [String]
 
     init(json: CompanyJSON) {
@@ -605,6 +619,7 @@ struct CompanyDamageReport {
             names = a.compactMap { $0["name"]?.stringValue ?? $0["code"]?.stringValue }
         }
         typeNames = names
+        if case .array(let a)? = json["damageTypes"] { typeCodes = a.compactMap { $0["code"]?.stringValue } } else { typeCodes = [] }
         var urls: [String] = []
         if case .array(let a)? = json["photoUrls"] { urls = a.compactMap { $0.stringValue } }
         if urls.isEmpty, case .array(let a)? = json["photos"] { urls = a.compactMap { $0["url"]?.stringValue } }

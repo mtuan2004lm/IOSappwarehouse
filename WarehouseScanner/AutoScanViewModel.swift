@@ -47,6 +47,7 @@ final class AutoScanViewModel: ObservableObject {
     @Published var lastItem: ScannedItem?     // kiện gửi thành công gần nhất (để gắn ảnh hỏng nếu cần)
     @Published var banner: String?
     @Published var pendingTracks = 0          // số tracking chưa có thông tin của tem đang quét (0...3)
+    @Published var pendingCodes: [String] = []   // các mã đã quét mà công ty không có (để người quét chọn mã chính)
     @Published var endRequired = false        // true: bắt buộc quét QR END CODE (pop-up chặn)
     @Published var ocrDebug = ""            // các dòng chữ OCR đang đọc (hiện nhỏ trên màn quét để biết app đọc ra gì)
     @Published var hint: String?              // lý do app đang im lặng (vd. tem đã quét rồi) để không tưởng app hỏng
@@ -81,7 +82,7 @@ final class AutoScanViewModel: ObservableObject {
     private var retryTask: Task<Void, Never>?
     /// Phiên công ty đang quét (ghi thật lên apiwh-dev).
     let company: CompanyScanTarget
-    private var coPending: [String] = []       // tracking chưa có thông tin của tem đang quét (tối đa 3, chỉ lưu trong bộ nhớ)
+    private var coPending: [String] = [] { didSet { pendingCodes = coPending } }   // tracking chưa có thông tin của tem đang quét (tối đa 3, chỉ lưu trong bộ nhớ)
     private var coPendingText = ""             // mã kho của tem đang quét
 
     init(session: ReceivingSession, company: CompanyScanTarget) { self.session = session; self.company = company }
@@ -108,6 +109,15 @@ final class AutoScanViewModel: ObservableObject {
         clearPending()
         Haptics.tick()
         Task { await send(code: "ENDCODE", text: lastLabel?.text ?? "", group: "") }
+    }
+
+    /// Người quét tự chọn MỘT trong các mã chưa có thông tin làm mã chính; các mã còn lại thành mã phụ rồi chốt kiện NO NAME (như END CODE).
+    func chooseMain(_ code: String) {
+        guard let i = coPending.firstIndex(of: code) else { return }
+        coPending.remove(at: i)
+        coPending.insert(code, at: 0)
+        endCodeAt = nil
+        endCode()
     }
 
     private func showHint(_ text: String) {

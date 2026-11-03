@@ -78,6 +78,7 @@ Mỗi mã vạch: hỏi công ty **song song tất cả mã ứng viên** (`chec
 - **`NOT_FOUND`** (chưa có thông tin): tính là **"ting"**, xếp vào hàng chờ, chờ tracking kế tiếp (hiện "Tracking n/3 chưa có thông tin").
 - **`DUPLICATE`** (đã quét trước đó): không ghi, tính vào số bỏ qua, báo "Mã đã quét trong phiên".
 - **Đủ 3 "ting" mà vẫn quét tiếp** → chặn, bắt buộc bấm **END CODE**.
+- **Chọn mã chính** (nút dưới END CODE, 2/11/2026): liệt kê các mã đã quét mà công ty không có; người quét tick một mã (chỉ 1) rồi bấm Chốt kiện để làm mã chính, các mã còn lại là mã phụ, ghi kiện NO NAME (giống END CODE nhưng tự chọn mã chính). Code: `PickMainSheet`, `AutoScanViewModel.chooseMain`.
 - **END CODE** (nút trên màn quét, hoặc quét mã `ENDCODE` / `*ENDCODE*`, chỉ nhận đúng chữ `ENDCODE`): cả nhóm đang chờ không có thông tin → lấy tracking đầu làm tracking gốc, các mã còn lại là mã phụ, ghi kiện **NO NAME** (hiện "không có mã kho" nếu chưa đọc được mã kho). Không có tracking nào đang chờ thì không làm gì.
 - Cùng một tem vẫn nằm trong khung camera không bị tính lại. Mất mạng thì mã được xếp hàng và tự gửi lại; lỗi khác thì tính vào số bỏ qua.
 
@@ -104,6 +105,8 @@ Danh sách phiên và chi tiết phiên hiện **logo hãng** thay tên chữ. L
 ## Báo hư hỏng phiên công ty (26/10/2026)
 
 Nút "Hỏng" ở màn quét phiên công ty mở bảng Báo hư hỏng: loại hư hỏng (nhiều lựa chọn) → ảnh → Quyết định (Nhận hàng / Từ chối, nằm cuối) → Gửi. Mỗi kiện một báo cáo. Code: `CompanyDamageSheet` (`AutoScanView.swift`), `CompanyAPI.reportDamage` (`APIClient.swift`).
+
+**Sửa báo cáo / đổi ảnh (30/10/2026):** trong *Chi tiết kiện* (từ danh sách kiện của phiên): kiện chưa có báo cáo → nút "Báo hư hỏng"; đã có → nút "Sửa báo cáo / đổi ảnh" (cùng bảng `CompanyDamageSheet`, chế độ sửa, `PATCH /trackings/{id}/damage-report` qua `CompanyAPI.updateDamageReport`). Điền sẵn loại hiện có; ảnh mới **thay toàn bộ** ảnh cũ (không chụp mới = giữ ảnh cũ); quyết định chỉ gửi khi đổi và bị khoá khi kiện đang giữ/đã từ chối.
 
 ## Xem lại ảnh label trong chi tiết kiện (27/10/2026)
 

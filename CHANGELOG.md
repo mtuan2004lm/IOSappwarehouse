@@ -9,6 +9,21 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-11-02 · ⭐ 🔥 📱 Màn quét: nút "Chọn mã chính" trong các mã không có trong đơn hàng
+- Khi tem có tracking "ting" (công ty không có mã trong danh sách đơn), dưới nút END CODE hiện thêm nút **Chọn mã chính (n mã không có trong đơn)**. Bấm → dừng camera, mở bảng liệt kê các mã đã quét mà công ty không có (tối đa 3); **tick 1 trong các mã** (chỉ chọn được 1) → bấm **Chốt kiện** → mã tick thành **mã chính**, các mã còn lại thành **mã phụ**, ghi kiện **NO NAME** lên công ty (cùng luồng END CODE, chỉ khác là người quét tự chọn mã chính thay vì mặc định mã quét đầu). Đóng bảng thì camera tự quét lại.
+- Nút END CODE cũ giữ nguyên (mã đầu làm mã chính).
+- Code: `AutoScanViewModel.pendingCodes` (phản chiếu `coPending`) + `chooseMain(_:)` (đưa mã chọn lên đầu rồi gọi `endCode()`); `PickMainSheet` + nút + `.sheet` trong `AutoScanView.swift`; `Localization.swift` thêm 8 câu EN.
+- 🔥 Chưa thử trên máy: bảng hiện đúng mã, chọn xong kiện NO NAME ghi đúng mã chính + mã phụ, camera quét lại sau khi đóng.
+
+### 2026-10-30 · ⭐ 🔥 📱 Sửa báo cáo hư hỏng / đổi ảnh ngay trong app (từ Chi tiết kiện)
+- Trước đây app chỉ **báo mới** được và chỉ từ nút "Hỏng" ở màn quét (kiện vừa quét). Nay mở **Chi tiết kiện** (từ danh sách kiện của phiên) là làm được hết:
+  - Kiện **chưa có báo cáo**: mục "Hư hỏng" có nút **Báo hư hỏng** (gửi mới, `POST /trackings/{id}/damage-report`).
+  - Kiện **đã có báo cáo**: mục "Ảnh báo hư hỏng" có nút **Sửa báo cáo / đổi ảnh** (`PATCH /trackings/{id}/damage-report`): sửa loại hư hỏng (điền sẵn loại hiện có), đổi quyết định, chụp ảnh mới.
+- ⭐ **Ảnh mới THAY TOÀN BỘ ảnh cũ** (đúng Swagger: `files` = bộ ảnh thay thế). Không chụp ảnh mới = giữ nguyên ảnh cũ. Màn sửa hiện ảnh đang có trên công ty (mờ đi khi đã chụp ảnh mới) kèm dòng cảnh báo. Nút "Lưu thay đổi" chỉ sáng khi có gì đó đổi.
+- Quyết định chỉ gửi khi bạn đổi. Kiện đang giữ (ON_HOLD) hoặc đã từ chối/trả người bán: khoá ô quyết định (công ty không cho đổi; Từ chối không đảo lại được, có cảnh báo khi chọn). Kiện RETURNED_TO_SELLER: ẩn nút sửa; ON_HOLD: ẩn nút báo mới (công ty trả 400).
+- Code: `CompanyAPI.updateDamageReport` (PATCH multipart) + `CompanyDamageReport.typeCodes` (`APIClient.swift`); `CompanyDamageSheet` nhận `trackingId/code/existing/lockDecision/onFinished` thay vì `ScannedItem` (`AutoScanView.swift`; màn quét gọi như cũ); nút + `.sheet` trong `CompanyTrackingDetailView` (`SessionsView.swift`), đóng bảng thì tự tải lại chi tiết; `Localization.swift` thêm 14 câu EN (bỏ câu "gửi xong không sửa được từ app").
+- 🔥 Chưa thử trên máy / công ty: PATCH thật có nhận phần chỉ có `damageTypeCodes` (không `decision`, không ảnh) không; quyền sửa báo cáo của tài khoản kho; ảnh sau khi sửa hiện đúng trong chi tiết.
+
 ### 2026-10-28 · ⭐ 🔥 📱 Chi tiết phiên: nút sao chép mã tracking
 - Mỗi kiện trong danh sách có **nút sao chép nhỏ** (icon `doc.on.doc`, 28pt) **nằm ngay kế bên mã tracking** (theo ý bạn; bản đầu đặt ở mép phải dòng, to hơn): bấm → chép **mã tracking** (`trackingNumber`) vào bộ nhớ tạm, icon đổi thành ✓ xanh 1,5 giây kèm rung nhẹ. Giữ lâu lên dòng kiện cũng ra menu **"Sao chép mã"**.
 - Code: `copyTracking(_:)` + `@State copiedId` trong `CompanyTrackingsView` (`SessionsView.swift`, thêm `import UIKit` cho `UIPasteboard`); `Localization.swift` thêm 1 câu EN ("Sao chép mã" → "Copy code").

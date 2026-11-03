@@ -544,6 +544,7 @@ struct CompanyTrackingDetailView: View {
     @State private var viewer: PhotoViewerItem?
     @State private var damage: CompanyDamageReport?
     @State private var damageNote: String?      // lý do chưa lấy được báo cáo hư hỏng
+    @State private var showDamageSheet = false
 
     var body: some View {
         let t = tracking
@@ -600,11 +601,21 @@ struct CompanyTrackingDetailView: View {
                                 .padding(.vertical, 4)
                             }
                         }
+                        if canEditDamage {
+                            Button { showDamageSheet = true } label: { Label(tr("Sửa báo cáo / đổi ảnh"), systemImage: "pencil") }
+                        }
                     } else if let n = damageNote {
                         Text(tr("Chưa lấy được báo cáo hư hỏng: {0}", n)).font(.caption).foregroundStyle(.secondary)
+                        if canReportDamage {
+                            Button { showDamageSheet = true } label: { Label(tr("Báo hư hỏng"), systemImage: "exclamationmark.triangle") }
+                        }
                     } else {
                         ProgressView()
                     }
+                }
+            } else if canReportDamage {
+                Section(tr("Hư hỏng")) {
+                    Button { showDamageSheet = true } label: { Label(tr("Báo hư hỏng"), systemImage: "exclamationmark.triangle") }
                 }
             }
             Section(tr("Số lượng")) {
@@ -640,9 +651,18 @@ struct CompanyTrackingDetailView: View {
         .navigationTitle(tr("Chi tiết kiện"))
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $viewer) { PhotoViewer(item: $0) }
+        .sheet(isPresented: $showDamageSheet, onDismiss: { Task { await refresh() } }) {
+            CompanyDamageSheet(trackingId: tracking.id, code: tracking.trackingNumber,
+                               existing: damage,
+                               lockDecision: tracking.status == "ON_HOLD" || tracking.status == "RETURNED_TO_SELLER")
+        }
         .task { await refresh() }
         .refreshable { await refresh() }
     }
+
+    /// Kiện đã trả người bán (hoặc đang giữ) thì công ty không nhận báo cáo mới (400).
+    private var canReportDamage: Bool { tracking.status != "ON_HOLD" && tracking.status != "RETURNED_TO_SELLER" }
+    private var canEditDamage: Bool { tracking.status != "RETURNED_TO_SELLER" }
 
     /// Nhãn nằm trên, giá trị nằm dưới ăn hết chiều ngang và to hơn: đọc được trọn tên hàng dài.
     private func rowStacked(_ k: String, _ v: String) -> some View {

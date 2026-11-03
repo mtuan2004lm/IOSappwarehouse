@@ -12,6 +12,7 @@ struct AutoScanView: View {
     @State private var showPhoto = false
     @State private var photoTarget: ScannedItem?
     @State private var showHistory = false
+    @State private var showPickMain = false        // bảng chọn mã chính trong các mã không có trong đơn hàng
     @State private var showDamage = false          // phiên công ty: bảng báo hư hỏng
     @Environment(\.dismiss) private var dismiss
     @State private var paused = false              // đã dừng quét (chốt kiện)
@@ -71,6 +72,16 @@ struct AutoScanView: View {
                         .frame(maxWidth: .infinity, minHeight: 64)
                         .foregroundStyle(.white)
                         .background(vm.pendingTracks >= 3 ? Color.dupRed : Color.accent, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .padding(.horizontal, 16)
+                    Button {
+                        camera.stop()                // dừng camera để không quét thêm khi đang chọn
+                        showPickMain = true
+                    } label: {
+                        Label(tr("Chọn mã chính ({0} mã không có trong đơn)", vm.pendingTracks), systemImage: "list.bullet.rectangle")
+                            .font(.subheadline.bold()).frame(maxWidth: .infinity, minHeight: 44)
+                            .foregroundStyle(.white)
+                            .background(Color.navy.opacity(0.9), in: RoundedRectangle(cornerRadius: 12))
                     }
                     .padding(.horizontal, 16)
                 }
@@ -140,8 +151,11 @@ struct AutoScanView: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showHistory) { HistorySheet(entries: vm.entries) }
+        .sheet(isPresented: $showPickMain, onDismiss: { if !paused { startScanning() } }) {
+            PickMainSheet(codes: vm.pendingCodes) { code in vm.chooseMain(code) }
+        }
         .sheet(isPresented: $showDamage, onDismiss: { startScanning() }) {
-            if let item = photoTarget { CompanyDamageSheet(item: item) }
+            if let item = photoTarget { CompanyDamageSheet(trackingId: item.id.value, code: item.barcode) }
         }
         .alert(tr("Dừng quét?"), isPresented: $confirmStop) {
             Button(tr("Huỷ"), role: .cancel) {}
@@ -418,10 +432,62 @@ struct AutoScanView: View {
 }
 
 
+// MARK: - Chọn mã chính trong các mã không có trong đơn hàng
+
+struct PickMainSheet: View {
+    let codes: [String]
+    let onPick: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var chosen: String?       // chỉ tick được 1 mã
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                List {
+                    Section {
+                        ForEach(Array(codes.enumerated()), id: \.offset) { _, c in
+                            Button { chosen = c; Haptics.tick() } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: chosen == c ? "checkmark.circle.fill" : "circle")
+                                        .font(.title2).foregroundStyle(chosen == c ? Color.accent : Color.secondary)
+                                    Text(c).font(.system(.body, design: .monospaced)).multilineTextAlignment(.leading)
+                                    Spacer(minLength: 0)
+                                }
+                                .frame(minHeight: 48)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text(tr("Các mã đã quét nhưng công ty không có trong danh sách đơn hàng"))
+                    } footer: {
+                        Text(tr("Tick một mã làm mã chính. Các mã còn lại sẽ thành mã phụ của cùng một kiện NO NAME. Kiện ghi lên công ty và không xoá được."))
+                    }
+                }
+                Button {
+                    if let c = chosen { onPick(c); dismiss() }
+                } label: {
+                    Text(tr("Chốt kiện")).font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent).tint(.accent)
+                .disabled(chosen == nil)
+                .padding(16)
+            }
+            .navigationTitle(tr("Chọn mã chính"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(tr("Huỷ")) { dismiss() } } }
+        }
+    }
+}
+
 // MARK: - Báo hư hỏng của kiện (phiên công ty, GHI thật) — giống web: loại hư hỏng → ảnh → quyết định (cuối cùng)
 
 struct CompanyDamageSheet: View {
-    let item: ScannedItem
+    let trackingId: String
+    let code: String
+    var existing: CompanyDamageReport? = nil     // có = đang SỬA báo cáo đã gửi (PATCH); nil = báo mới (POST)
+    var lockDecision = false                     // kiện đang giữ/đã trả người bán: không đổi được quyết định
+    var onFinished: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var types: [CompanyDamageType] = []
     @State private var selected: Set<String> = []
@@ -438,7 +504,7 @@ struct CompanyDamageSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(item.barcode).font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(code).font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
 
                     // 1. Loại hư hỏng (chọn được nhiều)
                     Text(tr("Loại hư hỏng")).font(.headline)
@@ -469,6 +535,21 @@ struct CompanyDamageSheet: View {
                         Button { showPicker = true } label: { Label(tr("Chụp ảnh"), systemImage: "camera") }
                             .buttonStyle(.bordered).disabled(photos.count >= 10)
                     }
+                    if let ex = existing, !ex.photoURLs.isEmpty {
+                        Text(tr("Ảnh hiện có trên công ty ({0})", ex.photoURLs.count)).font(.footnote).foregroundStyle(.secondary)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(Array(ex.photoURLs.enumerated()), id: \.offset) { _, u in
+                                    RemotePhoto(urlString: u, fill: true)
+                                        .frame(width: 84, height: 84).clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .opacity(photos.isEmpty ? 1 : 0.35)
+                                }
+                            }
+                        }
+                        Text(photos.isEmpty ? tr("Muốn đổi ảnh: chụp ảnh mới bên dưới. Ảnh mới sẽ THAY TOÀN BỘ ảnh cũ.")
+                                            : tr("Sẽ thay toàn bộ ảnh cũ bằng {0} ảnh mới.", photos.count))
+                            .font(.footnote).foregroundStyle(photos.isEmpty ? Color.secondary : Color.accent)
+                    }
                     if !photos.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -490,37 +571,54 @@ struct CompanyDamageSheet: View {
                         Text(tr("Từ chối")).tag("REJECTED")
                     }
                     .pickerStyle(.segmented)
-                    if decision == "REJECTED" {
+                    .disabled(lockDecision || existing?.decision == "REJECTED")
+                    if existing != nil && (lockDecision || existing?.decision == "REJECTED") {
+                        Text(tr("Không đổi được quyết định của kiện này (đang giữ hoặc đã từ chối).")).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if decision == "REJECTED" && existing?.decision != "REJECTED" {
                         Text(tr("Từ chối: kiện chuyển sang trả người bán. Kiện đã vào thùng thì công ty không cho từ chối.")).font(.footnote).foregroundStyle(Color.accent)
                     }
 
                     if let error { Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent).font(.footnote) }
                     if done {
-                        Label(tr("Đã gửi báo cáo hư hỏng"), systemImage: "checkmark.circle.fill").foregroundStyle(Color.okGreen).font(.headline)
+                        Label(existing == nil ? tr("Đã gửi báo cáo hư hỏng") : tr("Đã cập nhật báo cáo hư hỏng"), systemImage: "checkmark.circle.fill").foregroundStyle(Color.okGreen).font(.headline)
                     } else {
                         Button { confirm = true } label: {
-                            HStack { Spacer(); if saving { ProgressView() }; Text(saving ? tr("Đang gửi…") : tr("Gửi báo cáo")).font(.headline); Spacer() }
+                            HStack { Spacer(); if saving { ProgressView() }; Text(saving ? tr("Đang gửi…") : (existing == nil ? tr("Gửi báo cáo") : tr("Lưu thay đổi"))).font(.headline); Spacer() }
                                 .frame(minHeight: 50)
                         }
                         .buttonStyle(.borderedProminent).tint(.accent)
-                        .disabled(saving || selected.isEmpty)
+                        .disabled(saving || selected.isEmpty || !hasChanges)
                         if selected.isEmpty { Text(tr("Chọn ít nhất một loại hư hỏng.")).font(.footnote).foregroundStyle(.secondary) }
                     }
                 }
                 .padding(16)
             }
-            .navigationTitle(tr("Báo hư hỏng"))
+            .navigationTitle(existing == nil ? tr("Báo hư hỏng") : tr("Sửa báo cáo hư hỏng"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(done ? tr("Đóng") : tr("Huỷ")) { dismiss() } } }
             .task { await loadTypes() }
+            .onAppear {
+                if let ex = existing, selected.isEmpty { selected = Set(ex.typeCodes); decision = ex.decision ?? "RECEIVED" }
+            }
             .fullScreenCover(isPresented: $showPicker) {
                 PhotoPicker(onImage: { img in photos.append(img); showPicker = false }, onCancel: { showPicker = false }).ignoresSafeArea()
             }
-            .alert(tr("Gửi báo cáo hư hỏng lên công ty?"), isPresented: $confirm) {
+            .alert(existing == nil ? tr("Gửi báo cáo hư hỏng lên công ty?") : tr("Cập nhật báo cáo hư hỏng trên công ty?"), isPresented: $confirm) {
                 Button(tr("Huỷ"), role: .cancel) {}
-                Button(tr("Gửi")) { Task { await send() } }
-            } message: { Text(tr("Mỗi kiện chỉ có một báo cáo, gửi xong không sửa được từ app.")) }
+                Button(existing == nil ? tr("Gửi") : tr("Lưu")) { Task { await send() } }
+            } message: {
+                Text(existing == nil ? tr("Mỗi kiện chỉ có một báo cáo. Gửi xong vẫn sửa được trong Chi tiết kiện.")
+                                     : (decisionChanged && decision == "REJECTED" ? tr("Từ chối sẽ chuyển kiện sang trả người bán và KHÔNG đảo lại được.")
+                                        : (photos.isEmpty ? tr("Cập nhật loại hư hỏng/quyết định, giữ nguyên ảnh cũ.") : tr("Ảnh mới sẽ thay toàn bộ ảnh cũ trên công ty."))))
+            }
         }
+    }
+
+    private var decisionChanged: Bool { existing != nil && decision != (existing?.decision ?? "RECEIVED") }
+    private var hasChanges: Bool {
+        guard let ex = existing else { return true }
+        return selected != Set(ex.typeCodes) || decisionChanged || !photos.isEmpty
     }
 
     private func loadTypes() async {
@@ -534,10 +632,16 @@ struct CompanyDamageSheet: View {
         saving = true; error = nil
         defer { saving = false }
         let jpegs = photos.compactMap { $0.resized(maxSide: 1600).jpegData(compressionQuality: 0.7) }
+        let codes = types.map(\.code).filter { selected.contains($0) }
         do {
-            try await CompanyAPI.shared.reportDamage(trackingId: item.id.value, typeCodes: types.map(\.code).filter { selected.contains($0) },
-                                                     decision: decision, photos: jpegs)
+            if existing == nil {
+                try await CompanyAPI.shared.reportDamage(trackingId: trackingId, typeCodes: codes, decision: decision, photos: jpegs)
+            } else {
+                try await CompanyAPI.shared.updateDamageReport(trackingId: trackingId, typeCodes: codes,
+                                                               decision: decisionChanged ? decision : nil, photos: jpegs)
+            }
             done = true
+            onFinished?()
             Haptics.success()
         } catch {
             self.error = error.localizedDescription
