@@ -27,6 +27,7 @@ struct LastResult: Equatable {
     var noName: Bool = false    // true: quét END CODE -> kiện NO NAME (tracking đầu làm tracking gốc)
     var company: Bool = false   // true: kết quả quét vào phiên công ty (hiện thẻ riêng)
     var noWarehouse: Bool = false // true: thấy mã vạch nhưng chưa đọc được mã kho -> yêu cầu đưa tem vào lại
+    var business: Bool = false  // true: mã kho thuộc nhóm KINH DOANH (FADO.VN: SG HUE DOFA, HN BANGTY DOFA, FD VAT HUE…) -> cảnh báo riêng
     var blocked: Bool = false   // true: kiện công ty báo đang BLOCK (đã ghi vào phiên nhưng cần xử lý trên web)
     var endBlocked: Bool = false // true: đã đủ 3 tracking không có thông tin mà vẫn quét tiếp -> bị chặn
 }
@@ -330,8 +331,9 @@ final class AutoScanViewModel: ObservableObject {
                 lastItem = companyItem(r.id, co, barcode: first, wh: wh, noName: true)
                 let note = "NO NAME · \(r.checkIn)" + (wh.isEmpty ? tr(" · không có mã kho") : tr(" · mã kho {0}", wh))
                 entries.insert(ScanEntry(barcode: first, warehouseText: wh.isEmpty ? nil : wh, status: .noName, note: note), at: 0)
-                last = LastResult(barcode: first, group: nil, warehouseText: wh.isEmpty ? nil : wh, message: note, noName: true)
-                Haptics.warning(); ScanSound.noName.play()
+                let biz = isBusiness(wh)
+                last = LastResult(barcode: first, group: nil, warehouseText: wh.isEmpty ? nil : wh, message: note, noName: true, business: biz)
+                Haptics.warning(); (biz ? ScanSound.business : ScanSound.noName).play()
                 return
             }
             let cut = TrackingCutter.candidates(code)
@@ -387,7 +389,9 @@ final class AutoScanViewModel: ObservableObject {
                     lastItem = companyItem(r.id, co, barcode: value, wh: customer, noName: r.matchStatus == "NO_NAME")
                     let note = r.matchStatus + (usedPending > 0 ? tr(" · +{0} mã phụ", usedPending) : "") + (customer.isEmpty ? tr(" · không có mã kho") : tr(" · mã kho {0}", customer))
                     entries.insert(ScanEntry(barcode: value, warehouseText: customer.isEmpty ? nil : customer, status: r.matchStatus == "NO_NAME" ? .noName : .sent, note: note), at: 0)
-                    last = LastResult(barcode: value, group: nil, warehouseText: customer.isEmpty ? nil : customer, message: note, company: true)
+                    let biz = isBusiness(customer)
+                    last = LastResult(barcode: value, group: nil, warehouseText: customer.isEmpty ? nil : customer, message: note, company: true, business: biz)
+                    if biz { entries[0].note = (entries[0].note ?? "") + " · " + tr("KINH DOANH") }
                     let blocks = Array(Set(checkBlocks + r.blocks)).sorted()
                     if !blocks.isEmpty {
                         // Công ty báo kiện đang BLOCK: báo to + âm riêng (không phải SUCCESS)
@@ -396,7 +400,7 @@ final class AutoScanViewModel: ObservableObject {
                         last = LastResult(barcode: value, group: nil, warehouseText: customer.isEmpty ? nil : customer, message: bn, blocked: true)
                         Haptics.error(); ScanSound.block.play()
                     } else {
-                        Haptics.success(); ScanSound.found.play()
+                        Haptics.success(); (biz ? ScanSound.business : ScanSound.found).play()
                     }
                 }
             default:    // NOT_FOUND: chưa có thông tin → "ting"
@@ -427,6 +431,12 @@ final class AutoScanViewModel: ObservableObject {
         } catch {
             enqueue(code: code, text: text, group: group)
         }
+    }
+
+    /// Mã kho này thuộc nhóm KINH DOANH không (theo quy tắc `WarehouseRule`, businessType = KINH_DOANH: FD VAT HUE, SG HUE DOFA, HN BANGTY DOFA, SG/HN FRAGILE DOFA).
+    /// "SG HUE_DOFA168" / "SG FRAGILE_DOFA168" (FADO 168) là KHÔNG kinh doanh nên không báo.
+    private func isBusiness(_ warehouseText: String) -> Bool {
+        !warehouseText.isEmpty && matcher.match(warehouseText)?.businessType == "KINH_DOANH"
     }
 
     /// Kiện công ty vừa ghi, để gắn ảnh label (nút "Ảnh label").

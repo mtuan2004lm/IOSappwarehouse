@@ -48,7 +48,7 @@ struct SettingsView: View {
 
 /// Âm thanh theo trạng thái quét (dùng âm hệ thống của iPhone, người dùng chọn trong Cài đặt). 0 = tắt.
 enum ScanSound: String, CaseIterable, Identifiable {
-    case found, ting, noName, duplicate, blocked, noWarehouse, rejected, block
+    case found, ting, noName, duplicate, blocked, noWarehouse, rejected, block, business
     var id: String { rawValue }
     var key: String { self == .rejected ? "snd_rejected2" : "snd_" + rawValue }     // rejected đổi khoá (v2) để mặc định mới là giọng đọc "Block"
 
@@ -62,6 +62,7 @@ enum ScanSound: String, CaseIterable, Identifiable {
         case .noWarehouse: return tr("Thiếu mã kho")
         case .rejected: return tr("Công ty từ chối / lỗi")
         case .block: return tr("Kiện đang bị block")
+        case .business: return tr("Hàng kinh doanh (DOFA)")
         }
     }
     var defaultID: Int {
@@ -70,6 +71,7 @@ enum ScanSound: String, CaseIterable, Identifiable {
         case .ting, .noName: return 1103
         case .duplicate, .blocked, .noWarehouse: return 1053
         case .rejected, .block: return Self.blockVoice
+        case .business: return 1016
         }
     }
     var current: Int { UserDefaults.standard.object(forKey: key) as? Int ?? defaultID }

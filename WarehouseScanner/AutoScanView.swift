@@ -264,6 +264,20 @@ struct AutoScanView: View {
         return "\(head)…\(tail)"
     }
 
+    /// Dải cảnh báo "HÀNG KINH DOANH" (mã kho nhóm FADO.VN: DOFA…): nổi bật để nhân viên nhận biết ngay.
+    private func businessBanner(_ warehouse: String?) -> some View {
+        VStack(spacing: 2) {
+            Label(tr("HÀNG KINH DOANH"), systemImage: "exclamationmark.triangle.fill")
+                .font(.headline.weight(.heavy))
+            if let w = warehouse, !w.isEmpty {
+                Text(w).font(.system(.title3, design: .monospaced).weight(.bold)).lineLimit(1).minimumScaleFactor(0.5)
+            }
+        }
+        .foregroundStyle(.black)
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(Color.yellow, in: RoundedRectangle(cornerRadius: 12))
+    }
+
     @ViewBuilder private var resultCard: some View {
         if vm.reading {
             card(bg: Color.navy.opacity(0.92)) {
@@ -294,6 +308,7 @@ struct AutoScanView: View {
             } else if r.noName {
                 card(bg: Color.purple) {
                     VStack(spacing: 4) {
+                        if r.business { businessBanner(r.warehouseText) }
                         Text("NO NAME").font(.system(size: 34, weight: .heavy))
                         Text(tr("Cả 3 tracking không có thông tin")).font(.subheadline.bold())
                         codeText(r.barcode)
@@ -341,11 +356,12 @@ struct AutoScanView: View {
                 // Quét vào phiên công ty: hiện mã kho đã gửi và kết quả công ty trả về
                 card(bg: Color.okGreen) {
                     VStack(spacing: 6) {
+                        if r.business { businessBanner(r.warehouseText) }
                         Text("SUCCESS").font(.headline.weight(.heavy))
                         codeText(r.barcode)
                         VStack(spacing: 4) {
-                            infoRow(tr("MÃ KHO"), r.warehouseText ?? "—", mono: true)
-                            if let m = r.message { Text(m).font(.footnote).opacity(0.9).multilineTextAlignment(.center) }
+                            if !r.business { infoRow(tr("MÃ KHO"), r.warehouseText ?? "—", mono: true) }      // hàng kinh doanh: mã kho đã nằm trong dải vàng
+                            if let m = r.message { Text(m).font(.footnote).opacity(0.9).multilineTextAlignment(.center).lineLimit(2) }
                         }
                     }
                 }

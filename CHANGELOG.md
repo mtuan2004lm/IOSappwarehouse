@@ -9,6 +9,14 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-11-04 · ⭐ 🔥 📱 Cảnh báo HÀNG KINH DOANH (mã kho DOFA…) khi quét — theo yêu cầu của sếp
+- Khi kiện được ghi mà **mã kho thuộc nhóm KINH DOANH** (quy tắc FADO.VN, `businessType = KINH_DOANH`: `SG HUE DOFA`, `HN BANGTY DOFA`, `SG FRAGILE DOFA`, `HN FRAGILE DOFA` và `FD VAT HUE`), app: hiện **dải vàng "HÀNG KINH DOANH"** trên thẻ kết quả (cả SUCCESS và NO NAME), phát **âm riêng** thay cho âm "yes"/NO NAME, và ghi thêm "· KINH DOANH" vào lịch sử quét.
+- Dải vàng **hiện luôn mã kho** (vd. `SG HUE DOFA`) ngay dưới chữ "HÀNG KINH DOANH" nên nhìn thẻ là biết mã kho nào; ở thẻ SUCCESS dòng "MÃ KHO" riêng được ẩn đi để thẻ không bị tràn.
+- Âm mới **"Hàng kinh doanh (DOFA)"** trong Cài đặt > Âm thanh khi quét (mặc định âm hệ thống 1016, đổi được hoặc chọn giọng đọc "Block"). Kiện đang block vẫn ưu tiên báo BLOCK.
+- **Không báo** với `SG HUE_DOFA168` / `SG FRAGILE_DOFA168` (nhóm FADO 168, KHÔNG kinh doanh) dù cũng có chữ DOFA — vì quy tắc 2 khớp trước quy tắc 4 như trước nay. `FD VAT HUE` (không có chữ DOFA nhưng cũng là kinh doanh) hiện CŨNG bị báo; muốn chỉ báo DOFA thì báo để mình thu hẹp.
+- Code: `AutoScanViewModel.isBusiness(_:)` + `LastResult.business`; `businessBanner` trong `AutoScanView.swift`; `ScanSound.business` trong `SettingsView.swift`; `Localization.swift` +3 câu EN.
+- 🔥 Chưa làm: tài liệu nói "một số mã kinh doanh phải chuyển sang không kinh doanh nếu không đáp ứng yêu cầu nhập khẩu" (`requiresImportCheck`) — app chưa kiểm tra yêu cầu nhập khẩu. Ô gõ tay không có mã kho nên chưa báo kinh doanh. Chưa thử trên máy.
+
 ### 2026-11-03 · ⭐ 🔥 📱 Sửa lỗi OCR: "HNHUF MCF" phải là "HNHUE MCF"
 - Lỗi: tem `HNHUE MCF` bị OCR đọc thành `HNHUF MCF` (E → F); quy tắc MICAFI (`MCF$`) vẫn khớp nên app gửi lên công ty nguyên chữ sai, web hiện "HNHUF MCF".
 - Sửa: `RuleMatcher.normalizeOCR` thêm chuẩn hoá `^((HN|SG) ?HU|FD ?VAT ?HU)F\b` → `…E` (HNHUF MCF → HNHUE MCF, SGHUF DOFA → SGHUE DOFA, FD VAT HUF → FD VAT HUE). Đặt **trước** các sửa lỗi DOFA168 để "SG HUF DOFA16&" cũng được sửa tiếp. Đã thử mẫu bằng regex ngoài Xcode; chưa chạy trên máy.

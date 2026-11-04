@@ -84,6 +84,8 @@ Mỗi mã vạch: hỏi công ty **song song tất cả mã ứng viên** (`chec
 
 **Gõ/dán mã tay (3/11/2026):** ô "Gõ hoặc dán mã tracking" ở chi tiết phiên kiểm tra mã (danh sách đã quét + `check-tracking-scan`), và nếu phiên đang mở thì ghi được lên công ty (`POST /trackings/scan`, một mã, không mã kho): nhấn Enter, `FOUND` → ghi ngay như một lần quét (không hỏi xác nhận); `NOT_FOUND` → phải bấm nút ghi kiện NO NAME (có hỏi xác nhận). Code: `runCheck`/`writeCode` (`SessionsView.swift`).
 
+**Hàng kinh doanh (4/11/2026):** mã kho nhóm KINH DOANH (FADO.VN: SG HUE DOFA, HN BANGTY DOFA, SG/HN FRAGILE DOFA, FD VAT HUE; không gồm `…_DOFA168`) → dải vàng "HÀNG KINH DOANH" + âm riêng khi ghi kiện (`isBusiness`, `ScanSound.business`). Chưa kiểm tra yêu cầu nhập khẩu.
+
 **Báo BLOCK (3/11/2026):** app dò dấu hiệu block (khoá chứa "block" có giá trị, hoặc trạng thái chứa BLOCK) trong phản hồi `check-tracking-scan` / `trackings/scan`; thấy thì hiện thẻ đỏ BLOCK, rung lỗi và phát âm block. Tên trường thật chưa xác minh (xem mục "Chi tiết từ công ty" ở ô gõ mã). Code: `CompanyJSON.blockHints`.
 
 **Âm thanh (3/11/2026):** mỗi trạng thái quét (có trong đơn, ting, NO NAME, trùng, bắt buộc END CODE, thiếu mã kho, bị từ chối, kiện block) có âm hệ thống riêng, đổi được ở Cài đặt > Âm thanh khi quét (`ScanSound` trong `SettingsView.swift`). Mặc định: yes 1057, ting/NO NAME 1103, trùng/chặn END CODE/thiếu mã kho 1053, từ chối/lỗi = giọng đọc "Block" (m4a nhúng base64 trong `SettingsView.swift`, chọn được cho mọi trạng thái).
