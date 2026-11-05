@@ -654,8 +654,8 @@ struct CompanyTrackingDetailView: View {
         let t = tracking
         List {
             Section(tr("Kiện")) {
-                row("Tracking", t.trackingNumber)
-                if !t.additionalTrackingNumbers.isEmpty { row(tr("Mã phụ"), t.additionalTrackingNumbers.joined(separator: ", ")) }
+                codeLines("Tracking", [t.trackingNumber])
+                if !t.additionalTrackingNumbers.isEmpty { codeLines(tr("Mã phụ"), t.additionalTrackingNumbers) }
                 row(tr("Trạng thái"), coStatusText(t.status))
                 rowStacked(tr("Khớp đơn"), t.isUnknown ? tr("Kiện không xác định (không có trong danh sách)") : ((t.matchStatus == "MATCHED" || t.hasOrderLines) ? coMatchedText(t) : (t.matchStatus ?? "—")))
                 row(tr("Khách"), t.customerCode ?? "—")
@@ -777,6 +777,18 @@ struct CompanyTrackingDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Các mã tracking: nhãn ở trên, MỖI MÃ MỘT DÒNG bên dưới (chữ đơn cách, tự xuống dòng nếu quá dài, không cắt "…"), bấm giữ để chép.
+    private func codeLines(_ k: String, _ codes: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(k).font(.subheadline).foregroundStyle(.secondary)
+            ForEach(Array(codes.enumerated()), id: \.offset) { _, c in
+                Text(c).font(.system(.body, design: .monospaced).weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func row(_ k: String, _ v: String) -> some View {
         HStack(alignment: .top) {
             Text(k).foregroundStyle(.secondary)
@@ -812,6 +824,10 @@ struct CompanyNewSessionView: View {
     @State private var carrierId = 0
     @State private var gate = ""
     @State private var driver = ""
+    @State private var plate = ""
+    @State private var vehicle = ""
+    @State private var useArrival = true            // bật = gửi "giờ xe đến" (mặc định là giờ hiện tại); tắt = để trống như web
+    @State private var arrival = Date()
     @State private var count = ""
     @State private var saving = false
     @State private var confirm = false
@@ -832,6 +848,12 @@ struct CompanyNewSessionView: View {
                 }
                 TextField(tr("Cửa kho"), text: $gate).textInputAutocapitalization(.characters).autocorrectionDisabled()
                 TextField(tr("Người giao"), text: $driver)
+                TextField(tr("Biển số"), text: $plate).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                TextField(tr("Loại xe"), text: $vehicle)
+                Toggle(tr("Ghi giờ xe đến"), isOn: $useArrival)
+                if useArrival {
+                    DatePicker(tr("Giờ xe đến"), selection: $arrival, in: ...Date().addingTimeInterval(3600), displayedComponents: [.date, .hourAndMinute])
+                }
                 TextField(tr("Số kiện hãng khai"), text: $count).keyboardType(.numberPad)
             }
             if let error { Section { Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.accent) } }
@@ -869,7 +891,10 @@ struct CompanyNewSessionView: View {
             createdId = try await CompanyAPI.shared.createSession(stationId: station.id, carrierId: carrierId,
                                                                   driverName: driver.trimmingCharacters(in: .whitespaces),
                                                                   reportedCount: Int(count) ?? 0,
-                                                                  dockGate: gate.trimmingCharacters(in: .whitespaces))
+                                                                  dockGate: gate.trimmingCharacters(in: .whitespaces),
+                                                                  licensePlate: plate.trimmingCharacters(in: .whitespaces),
+                                                                  vehicleType: vehicle.trimmingCharacters(in: .whitespaces),
+                                                                  vehicleArrivedAt: useArrival ? arrival : nil)
             done = true
             Haptics.success()
         } catch {

@@ -481,10 +481,15 @@ actor CompanyAPI {
 
     /// GHI lên công ty: tạo phiên nhận hàng (POST /receiving-sessions). Chỉ gọi khi người dùng đã xác nhận.
     /// Không giải mã cả phiên (tránh báo lỗi sau khi đã tạo xong, dẫn tới bấm tạo lần nữa); chỉ lấy `id`.
-    func createSession(stationId: Int, carrierId: Int, driverName: String, reportedCount: Int, dockGate: String) async throws -> Int {
+    func createSession(stationId: Int, carrierId: Int, driverName: String, reportedCount: Int, dockGate: String,
+                       licensePlate: String = "", vehicleType: String = "", vehicleArrivedAt: Date? = nil) async throws -> Int {
         var body: [String: Any] = ["stationId": stationId, "carrierId": carrierId,
                                    "driverName": driverName, "carrierReportedCount": reportedCount]
         if !dockGate.isEmpty { body["dockGate"] = dockGate }
+        if !licensePlate.isEmpty { body["licensePlate"] = licensePlate }      // biển số (không bắt buộc, giống web)
+        if !vehicleType.isEmpty { body["vehicleType"] = vehicleType }         // loại xe (không bắt buộc, giống web)
+        // Giờ xe đến (ISO 8601 UTC, vd. 2026-11-05T07:46:00Z): danh sách phiên trên web lọc ngày theo giờ này; để trống thì phiên không hiện khi lọc ngày.
+        if let vehicleArrivedAt { body["vehicleArrivedAt"] = ISO8601DateFormatter().string(from: vehicleArrivedAt) }
         let r = try await request(CompanyEnvelope<CompanyJSON>.self, "POST", "/receiving-sessions", json: body)
         return r.data["id"]?.intValue ?? 0
     }

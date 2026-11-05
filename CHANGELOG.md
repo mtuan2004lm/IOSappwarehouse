@@ -9,6 +9,17 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-11-05 · ⭐ 📱 Chi tiết kiện: hiện đủ cả 3 mã tracking, mỗi mã một dòng
+- Trước: dòng "Tracking" và "Mã phụ" nằm ngang (giá trị canh phải) nên mã dài bị cắt "…" và các mã phụ dồn chung một dòng cách nhau dấu phẩy. Nay nhãn ở trên, **mỗi mã một dòng** bên dưới, chữ đơn cách đậm vừa, tự xuống dòng nếu quá dài, bấm giữ để chép (vd. `9361289716369263527643` / `$BM3BM` / `SPX5TYXMDZ_001_V`).
+- Code: `SessionsView.swift` — hàm mới `codeLines(_:_:)` dùng cho "Tracking" và "Mã phụ" trong `CompanyTrackingDetailView`.
+- Cả 3 mã là mã thật trên tem (kể cả `$BM3BM`) nên app vẫn gom và ghi lên công ty như cũ, không lọc. Chưa thử trên máy.
+
+### 2026-11-05 · ⭐ 📱 Tạo phiên: thêm Biển số, Loại xe và Giờ xe đến (giống web)
+- Màn "Tạo phiên" thêm: **Biển số** (tự viết hoa), **Loại xe** (không bắt buộc, chỉ gửi khi có nhập: `licensePlate`, `vehicleType`) và **Giờ xe đến** (`vehicleArrivedAt`, ISO 8601 UTC).
+- ⭐ Giờ xe đến: công tắc **"Ghi giờ xe đến"** BẬT sẵn + chọn ngày giờ, **mặc định là giờ hiện tại** lúc mở form, sửa được (không cho chọn quá 1 giờ sau hiện tại). Lý do: web lọc danh sách phiên theo ngày bằng trường này, để trống thì phiên không hiện khi lọc ngày; app mặc định điền để phiên tạo từ app luôn hiện. Tắt công tắc = để trống như web. Giờ xe đến **không phải** giờ mở phiên (web cho nhập tay, có thể trước/sau lúc tạo).
+- Code: `CompanyNewSessionView` (SessionsView.swift: `plate`, `vehicle`, `useArrival`, `arrival`), `CompanyAPI.createSession` (+3 tham số mặc định rỗng/nil), `Localization.swift` +3 câu EN.
+- 🔥 Giờ mặc định lấy lúc mở form (không tự cập nhật nếu để form mở lâu — sửa tay nếu cần). Còn thiếu so với web: **Tên người ký nhận** (chưa biết tên trường API). Chưa thử trên máy: máy chủ nhận 3 trường này đúng tên theo Swagger không.
+
 ### 2026-11-05 · ⭐ 🔥 📱 Danh sách kiện: kiện mới quét lên trên, số thứ tự giảm dần (giống web)
 - Đảo ngược so với mục 28/10: `CompanyAPI.trackings` nay gửi `sort=checkedInAt&order=desc` → **kiện quét mới nhất ở trên cùng**, và số thứ tự **giảm dần**: dòng trên cùng = số lớn nhất (= tổng số kiện), dòng dưới cùng = 1 (kiện quét đầu tiên). Số của một kiện vẫn cố định theo lúc quét; quét thêm kiện thì kiện mới lên đầu với số lớn hơn.
 - Code: `SessionsView.swift` — `rowTotal` (đã tải hết danh sách thì = số dòng; chưa tải hết thì lấy "Đã quét" của phiên, không nhỏ hơn số dòng đã tải) và `rowNumber(index) = rowTotal - index`.
