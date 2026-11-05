@@ -447,9 +447,9 @@ actor CompanyAPI {
         let base = [URLQueryItem(name: "receivingSessionId", value: String(sessionId)),
                     URLQueryItem(name: "page", value: String(page)),
                     URLQueryItem(name: "limit", value: String(limit)),
-                    // Kiện quét đầu tiên lên trên (Swagger: sort=checkedInAt, order=asc)
+                    // Kiện quét MỚI NHẤT lên trên, giống web (Swagger: sort=checkedInAt, order=desc)
                     URLQueryItem(name: "sort", value: "checkedInAt"),
-                    URLQueryItem(name: "order", value: "asc")]
+                    URLQueryItem(name: "order", value: "desc")]
         // Web công ty gửi thêm include=orderItems,holdCaseItems để nhận kèm dòng hàng; nếu máy chủ từ chối thì gọi lại như cũ.
         if let r = try? await request(CompanyList<CompanyTracking>.self, "GET", "/trackings",
                                       query: base + [URLQueryItem(name: "include", value: "orderItems,holdCaseItems")]) { return r.data }

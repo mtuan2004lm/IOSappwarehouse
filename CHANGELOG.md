@@ -9,6 +9,11 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-11-05 · ⭐ 🔥 📱 Danh sách kiện: kiện mới quét lên trên, số thứ tự giảm dần (giống web)
+- Đảo ngược so với mục 28/10: `CompanyAPI.trackings` nay gửi `sort=checkedInAt&order=desc` → **kiện quét mới nhất ở trên cùng**, và số thứ tự **giảm dần**: dòng trên cùng = số lớn nhất (= tổng số kiện), dòng dưới cùng = 1 (kiện quét đầu tiên). Số của một kiện vẫn cố định theo lúc quét; quét thêm kiện thì kiện mới lên đầu với số lớn hơn.
+- Code: `SessionsView.swift` — `rowTotal` (đã tải hết danh sách thì = số dòng; chưa tải hết thì lấy "Đã quét" của phiên, không nhỏ hơn số dòng đã tải) và `rowNumber(index) = rowTotal - index`.
+- 🔥 Nếu "Đã quét" của phiên lớn hơn số kiện thực có trong danh sách, trong lúc chưa cuộn tải hết thì các số có thể lệch, đến khi tải hết sẽ chỉnh lại theo số dòng. Chưa thử trên máy: máy chủ nhận `order=desc` đúng như Swagger không (nếu lỗi thì danh sách báo lỗi).
+
 ### 2026-11-04 · ⭐ 🔥 📱 Cảnh báo HÀNG KINH DOANH (mã kho DOFA…) khi quét — theo yêu cầu của sếp
 - Khi kiện được ghi mà **mã kho thuộc nhóm KINH DOANH** (quy tắc FADO.VN, `businessType = KINH_DOANH`: `SG HUE DOFA`, `HN BANGTY DOFA`, `SG FRAGILE DOFA`, `HN FRAGILE DOFA` và `FD VAT HUE`), app: hiện **dải vàng "HÀNG KINH DOANH"** trên thẻ kết quả (cả SUCCESS và NO NAME), phát **âm riêng** thay cho âm "yes"/NO NAME, và ghi thêm "· KINH DOANH" vào lịch sử quét.
 - Dải vàng **hiện luôn mã kho** (vd. `SG HUE DOFA`) ngay dưới chữ "HÀNG KINH DOANH" nên nhìn thẻ là biết mã kho nào; ở thẻ SUCCESS dòng "MÃ KHO" riêng được ẩn đi để thẻ không bị tràn.

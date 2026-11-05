@@ -114,6 +114,8 @@ Danh sách phiên và chi tiết phiên hiện **logo hãng** thay tên chữ. L
 
 Nút "Hỏng" ở màn quét phiên công ty mở bảng Báo hư hỏng: loại hư hỏng (nhiều lựa chọn) → ảnh → Quyết định (Nhận hàng / Từ chối, nằm cuối) → Gửi. Mỗi kiện một báo cáo. Code: `CompanyDamageSheet` (`AutoScanView.swift`), `CompanyAPI.reportDamage` (`APIClient.swift`).
 
+**Danh sách kiện của phiên (05/11/2026):** kiện quét mới nhất ở trên cùng, số thứ tự giảm dần như web (dòng trên cùng = tổng số kiện, dòng cuối = 1 là kiện quét đầu tiên); máy chủ sắp bằng `sort=checkedInAt&order=desc`.
+
 **Sửa báo cáo / đổi ảnh (30/10/2026):** trong *Chi tiết kiện* (từ danh sách kiện của phiên): kiện chưa có báo cáo → nút "Báo hư hỏng"; đã có → nút "Sửa báo cáo / đổi ảnh" (cùng bảng `CompanyDamageSheet`, chế độ sửa, `PATCH /trackings/{id}/damage-report` qua `CompanyAPI.updateDamageReport`). Điền sẵn loại hiện có; ảnh mới **thay toàn bộ** ảnh cũ (không chụp mới = giữ ảnh cũ); quyết định chỉ gửi khi đổi và bị khoá khi kiện đang giữ/đã từ chối.
 
 ## Xem lại ảnh label trong chi tiết kiện (27/10/2026)

@@ -322,8 +322,11 @@ struct CompanyTrackingsView: View {
         }
     }
 
-    /// Số thứ tự của kiện theo lúc quét: máy chủ trả kiện quét đầu tiên ở trên cùng (sort=checkedInAt, order=asc), nên số = vị trí dòng.
-    private func rowNumber(_ index: Int) -> Int { index + 1 }
+    /// Số thứ tự của kiện theo lúc quét, giống web: máy chủ trả kiện quét MỚI NHẤT ở trên cùng (sort=checkedInAt, order=desc),
+    /// nên dòng trên cùng mang số lớn nhất (= tổng số kiện) và giảm dần xuống 1 (kiện quét đầu tiên).
+    /// Tổng: đã tải hết thì đúng bằng số dòng; chưa tải hết thì lấy "Đã quét" của phiên (không nhỏ hơn số dòng đã tải).
+    private var rowTotal: Int { hasMore ? max(current.actualScannedCount ?? 0, items.count) : items.count }
+    private func rowNumber(_ index: Int) -> Int { max(rowTotal - index, 1) }
 
     /// Xanh khi đã đủ kiện (đã quét ≥ hãng khai), vàng khi còn thiếu.
     private var countColor: Color {
@@ -423,7 +426,7 @@ struct CompanyTrackingsView: View {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, t in
                     NavigationLink { CompanyTrackingDetailView(tracking: t) } label: {
                         HStack(alignment: .center, spacing: 12) {
-                            // Số thứ tự theo lúc quét: 1 = kiện quét đầu tiên (dòng trên cùng); nằm giữa ô theo chiều dọc
+                            // Số thứ tự theo lúc quét: dòng trên cùng = kiện mới nhất (số lớn nhất), giảm dần xuống 1 = kiện quét đầu tiên; nằm giữa ô theo chiều dọc
                             Text("\(rowNumber(index))")
                                 .font(.title3.weight(.heavy).monospacedDigit())
                                 .foregroundStyle(.secondary)
