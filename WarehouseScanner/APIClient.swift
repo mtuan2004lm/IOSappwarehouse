@@ -209,9 +209,41 @@ enum CompanyJSON: Decodable {
     }
     subscript(key: String) -> CompanyJSON? { if case .object(let o) = self { return o[key] }; return nil }
 
+    /// Kiện đang block thì trả về **lý do block** để hiện cho nhân viên (chỉ lý do, không kèm giờ/nguồn); không block thì trả về rỗng.
+    /// Đã thấy JSON thật 06/11/2026: `blockRequestedAt`, `metadata.block = { at, info: [ { at, reason, source } ] }` — lấy các `reason`
+    /// nằm dưới khoá có chữ "block" (bỏ trùng, giữ thứ tự). Có dấu hiệu block mà không có lý do thì trả về "Không rõ lý do".
+    func blockHints() -> [String] {
+        guard !blockRaw().isEmpty else { return [] }
+        var reasons: [String] = []
+        for r in blockReasons(inBlock: false) where !reasons.contains(r) { reasons.append(r) }
+        return reasons.isEmpty ? [tr("Không rõ lý do")] : reasons
+    }
+
+    /// Các chuỗi `reason` nằm bên trong một khoá có chữ "block" (vd. metadata.block.info[].reason).
+    private func blockReasons(inBlock: Bool) -> [String] {
+        switch self {
+        case .object(let o):
+            var out: [String] = []
+            for k in o.keys.sorted() {
+                guard let v = o[k] else { continue }
+                if inBlock, k.lowercased() == "reason", case .string(let t) = v {
+                    let r = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !r.isEmpty { out.append(r) }
+                } else {
+                    out += v.blockReasons(inBlock: inBlock || k.lowercased().contains("block"))
+                }
+            }
+            return out
+        case .array(let a):
+            return a.flatMap { $0.blockReasons(inBlock: inBlock) }
+        default:
+            return []
+        }
+    }
+
     /// Dấu hiệu "đang block" trong phản hồi của công ty: khoá có chữ "block" mà giá trị có nghĩa (không null/false/rỗng/0),
-    /// hoặc trạng thái có chữ BLOCK (vd. "BLOCKED"). Tên trường thật của công ty chưa xác minh nên dò theo tên; trả về danh sách "khoá: giá trị".
-    func blockHints(path: String = "") -> [String] {
+    /// hoặc trạng thái có chữ BLOCK (vd. "BLOCKED"); trả về danh sách "khoá: giá trị" (chỉ dùng để nhận biết, không hiện ra).
+    private func blockRaw(path: String = "") -> [String] {
         var out: [String] = []
         switch self {
         case .object(let o):
@@ -232,9 +264,9 @@ enum CompanyJSON: Decodable {
                 } else if case .string(let t) = v, ["status", "matchstatus", "checkinresult", "state"].contains(k.lowercased()), t.uppercased().contains("BLOCK") {
                     out.append(name + ": " + t)
                 } else if case .object = v {
-                    out += v.blockHints(path: name)
+                    out += v.blockRaw(path: name)
                 } else if case .array(let a) = v {
-                    for (i, x) in a.enumerated() { out += x.blockHints(path: name + "[\(i)]") }
+                    for (i, x) in a.enumerated() { out += x.blockRaw(path: name + "[\(i)]") }
                 }
             }
         default: break

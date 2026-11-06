@@ -9,6 +9,22 @@
 
 ## Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-11-06 · ⭐ 🔥 📱 Kiện BLOCK: chỉ hiện LÝ DO block (bỏ giờ, nguồn, tên trường)
+- Đã thấy JSON block thật của công ty: `blockRequestedAt`, `metadata.block = { at, info: [ { at, reason, source } ] }`. Trước đây app hiện nguyên các dòng "khoá: giá trị" (vd. `blockRequestedAt: 2026-11-06T04:15…`, `metadata.block: at … info … reason: TEST nghi hàng cấm source: CLIENT_API`). Nay **chỉ hiện lý do**, vd. "TEST nghi hàng cấm".
+- Áp dụng mọi nơi báo block: ô gõ/dán mã (dưới "ĐANG BLOCK" và dưới "Đã ghi kiện … · ĐANG BLOCK", chữ thường thay vì chữ máy), màn quét (thẻ đỏ BLOCK và màn chờ "Quét tiếp tục": "ĐANG BLOCK · <lý do>"), lịch sử quét.
+- Code: `APIClient.swift` — `CompanyJSON.blockHints()` nay trả về các `reason` nằm dưới khoá có chữ "block" (bỏ trùng); cách nhận biết block cũ đổi tên thành `blockRaw` (private, chỉ để nhận biết). Có dấu hiệu block mà không có lý do → "Không rõ lý do" (`Localization.swift` +1 câu EN). `SessionsView.swift` — chữ lý do dùng `.subheadline`.
+- 🔥 Nhiều lần block (nhiều phần tử trong `info`) thì hiện tất cả lý do, mỗi lý do một dòng. Chưa thử trên máy.
+
+### 2026-11-06 · 📱 Ô gõ/dán mã: bỏ mục "Chi tiết từ công ty" và dòng hướng dẫn bên dưới
+- Theo ý bạn, ô gõ/dán mã trong Chi tiết phiên **không còn hiện** mục mở rộng "Chi tiết từ công ty" (JSON gốc công ty trả về) và **dòng chữ xám hướng dẫn** dưới ô ("Gõ hoặc dán mã rồi nhấn Enter: …"). Cách dùng không đổi: Enter là ghi, mã không có trong đơn thì bấm nút "Ghi thành kiện NO NAME". Kết quả kiểm tra/ghi (đã có, có trong đơn, NO NAME, ĐANG BLOCK…) vẫn hiện như cũ.
+- Code: `SessionsView.swift` — xoá phần `footer` của Section ô gõ mã, xoá `DisclosureGroup` dùng `checkDetail` (biến vẫn giữ, không ảnh hưởng). Câu EN "Chi tiết từ công ty" trong `Localization.swift` để nguyên (không dùng).
+- 🔥 Mục này từng dùng để xem tên trường "block" thật của công ty; muốn soi lại thì thêm lại tạm thời.
+
+### 2026-11-06 · ⭐ 🔥 📱 Quét trúng kiện BLOCK: dừng quét, bấm "Quét tiếp tục" mới quét tiếp
+- Trước: kiện BLOCK chỉ hiện thẻ đỏ + âm Block rồi app vẫn quét tiếp, dễ bỏ sót. Nay khi công ty báo kiện đang block (kiện vẫn được ghi vào phiên như cũ): app **dừng nhận mã mới**, che camera bằng màn tối với "BLOCK" to, mã tracking, mã kho và dòng báo, và **nút "Quét tiếp tục"**. Bấm nút thì nhận mã tiếp theo ngay (camera vẫn chạy nền nên không bị trễ).
+- Code: `AutoScanViewModel` — `blockHold`, `blockResult` (giữ kết quả block để màn chờ không bị kết quả khác ghi đè), `continueAfterBlock()`; `handle(barcodes:)` và `handle(lines:)` thoát sớm khi `blockHold`; nhánh có `blocks` gọi `clearPending(); blockResult = last; blockHold = true`. `AutoScanView` — lớp phủ khi `vm.blockHold`. `Localization.swift` +1 câu EN.
+- 🔥 Chỉ chạy khi app nhận ra block (cách nhận dạng block vẫn là đoán theo tên trường, chưa xác minh với JSON thật). Lệnh quét đã gửi đi trước lúc block vẫn hoàn tất bình thường. Chưa thử trên máy.
+
 ### 2026-11-05 · ⭐ 📱 Chi tiết kiện: hiện đủ cả 3 mã tracking, mỗi mã một dòng
 - Trước: dòng "Tracking" và "Mã phụ" nằm ngang (giá trị canh phải) nên mã dài bị cắt "…" và các mã phụ dồn chung một dòng cách nhau dấu phẩy. Nay nhãn ở trên, **mỗi mã một dòng** bên dưới, chữ đơn cách đậm vừa, tự xuống dòng nếu quá dài, bấm giữ để chép (vd. `9361289716369263527643` / `$BM3BM` / `SPX5TYXMDZ_001_V`).
 - Code: `SessionsView.swift` — hàm mới `codeLines(_:_:)` dùng cho "Tracking" và "Mã phụ" trong `CompanyTrackingDetailView`.

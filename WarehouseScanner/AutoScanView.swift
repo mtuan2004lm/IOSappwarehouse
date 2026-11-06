@@ -112,6 +112,27 @@ struct AutoScanView: View {
                 }
             }
 
+            // Kiện BLOCK: che camera, báo to, bấm "Quét tiếp tục" mới quét tiếp
+            if vm.blockHold, let r = vm.blockResult {
+                ZStack {
+                    Color.black.opacity(0.88).ignoresSafeArea()
+                    VStack(spacing: 14) {
+                        Image(systemName: "lock.fill").font(.system(size: 50)).foregroundStyle(.white)
+                        Text("BLOCK").font(.system(size: 44, weight: .heavy)).foregroundStyle(Color.dupRed)
+                        Text(tr("Kiện đang bị block — chưa nhận hàng")).font(.headline).multilineTextAlignment(.center)
+                        codeText(r.barcode, .system(.title3, design: .monospaced).weight(.semibold))
+                        if let t = r.warehouseText { Text(t).font(.system(.body, design: .monospaced)).opacity(0.9).lineLimit(1).minimumScaleFactor(0.5) }
+                        if let m = r.message { Text(m).font(.footnote).opacity(0.85).multilineTextAlignment(.center).lineLimit(3) }
+                        Button { vm.continueAfterBlock() } label: {
+                            Text(tr("Quét tiếp tục")).font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                        }
+                        .buttonStyle(.borderedProminent).tint(.accent)
+                        .padding(.top, 6)
+                    }
+                    .foregroundStyle(.white).padding(24).frame(maxWidth: 380)
+                }
+            }
+
             // Cảnh báo chặn: đủ 3 tracking không có thông tin -> bắt buộc bấm nút END CODE rồi mới quét tiếp
             if vm.endRequired {
                 VStack {

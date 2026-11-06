@@ -86,7 +86,7 @@ Mỗi mã vạch: hỏi công ty **song song tất cả mã ứng viên** (`chec
 
 **Hàng kinh doanh (4/11/2026):** mã kho nhóm KINH DOANH (FADO.VN: SG HUE DOFA, HN BANGTY DOFA, SG/HN FRAGILE DOFA, FD VAT HUE; không gồm `…_DOFA168`) → dải vàng "HÀNG KINH DOANH" + âm riêng khi ghi kiện (`isBusiness`, `ScanSound.business`). Chưa kiểm tra yêu cầu nhập khẩu.
 
-**Báo BLOCK (3/11/2026):** app dò dấu hiệu block (khoá chứa "block" có giá trị, hoặc trạng thái chứa BLOCK) trong phản hồi `check-tracking-scan` / `trackings/scan`; thấy thì hiện thẻ đỏ BLOCK, rung lỗi và phát âm block. Tên trường thật chưa xác minh (xem mục "Chi tiết từ công ty" ở ô gõ mã). Code: `CompanyJSON.blockHints`.
+**Báo BLOCK (3/11/2026):** app dò dấu hiệu block (khoá chứa "block" có giá trị, hoặc trạng thái chứa BLOCK) trong phản hồi `check-tracking-scan` / `trackings/scan`; thấy thì hiện thẻ đỏ BLOCK, rung lỗi và phát âm block. Từ 06/11/2026 app **chỉ hiện lý do block** (lấy `reason` trong `metadata.block.info[]`, JSON thật của công ty); không có lý do thì hiện "Không rõ lý do". Code: `CompanyJSON.blockHints`.
 
 **Âm thanh (3/11/2026):** mỗi trạng thái quét (có trong đơn, ting, NO NAME, trùng, bắt buộc END CODE, thiếu mã kho, bị từ chối, kiện block) có âm hệ thống riêng, đổi được ở Cài đặt > Âm thanh khi quét (`ScanSound` trong `SettingsView.swift`). Mặc định: yes 1057, ting/NO NAME 1103, trùng/chặn END CODE/thiếu mã kho 1053, từ chối/lỗi = giọng đọc "Block" (m4a nhúng base64 trong `SettingsView.swift`, chọn được cho mọi trạng thái).
 
@@ -113,6 +113,8 @@ Danh sách phiên và chi tiết phiên hiện **logo hãng** thay tên chữ. L
 ## Báo hư hỏng phiên công ty (26/10/2026)
 
 Nút "Hỏng" ở màn quét phiên công ty mở bảng Báo hư hỏng: loại hư hỏng (nhiều lựa chọn) → ảnh → Quyết định (Nhận hàng / Từ chối, nằm cuối) → Gửi. Mỗi kiện một báo cáo. Code: `CompanyDamageSheet` (`AutoScanView.swift`), `CompanyAPI.reportDamage` (`APIClient.swift`).
+
+**Kiện BLOCK khi quét (06/11/2026):** quét trúng kiện công ty báo đang block thì app báo to (BLOCK + âm Block) và **dừng quét**; phải bấm nút **"Quét tiếp tục"** mới nhận mã tiếp theo.
 
 **Chi tiết kiện (05/11/2026):** mã Tracking và các Mã phụ hiện đủ, **mỗi mã một dòng** (không cắt, tự xuống dòng nếu dài).
 

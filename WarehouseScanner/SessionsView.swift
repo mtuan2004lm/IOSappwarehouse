@@ -368,7 +368,7 @@ struct CompanyTrackingsView: View {
                     if !checkBlocks.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
                             Label(tr("ĐANG BLOCK"), systemImage: "lock.fill").font(.headline).foregroundStyle(Color.dupRed)
-                            Text(checkBlocks.joined(separator: "\n")).font(.caption.monospaced()).foregroundStyle(Color.dupRed)
+                            Text(checkBlocks.joined(separator: "\n")).font(.subheadline).foregroundStyle(Color.dupRed)
                         }
                     }
                     if st == "LISTED" || st == "DUPLICATE" {
@@ -392,17 +392,9 @@ struct CompanyTrackingsView: View {
                     Label(writeResult, systemImage: writeBlocks.isEmpty ? "checkmark.seal.fill" : "lock.fill")
                         .font(.headline).foregroundStyle(writeBlocks.isEmpty ? Color.okGreen : Color.dupRed)
                     if !writeBlocks.isEmpty {
-                        Text(writeBlocks.joined(separator: "\n")).font(.caption.monospaced()).foregroundStyle(Color.dupRed)
+                        Text(writeBlocks.joined(separator: "\n")).font(.subheadline).foregroundStyle(Color.dupRed)
                     }
                 }
-                if !checkDetail.isEmpty {
-                    DisclosureGroup(tr("Chi tiết từ công ty")) {
-                        Text(checkDetail).font(.caption.monospaced()).textSelection(.enabled)
-                    }
-                    .font(.footnote)
-                }
-            } footer: {
-                if canWriteCode { Text(tr("Gõ hoặc dán mã rồi nhấn Enter: mã có trong đơn được ghi ngay như khi quét (không có mã kho). Mã không có trong đơn thì bấm nút Ghi thành kiện NO NAME.")) }
             }
 
             if current.status == "OPEN" && !closedNow {

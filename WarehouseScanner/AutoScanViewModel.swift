@@ -51,6 +51,8 @@ final class AutoScanViewModel: ObservableObject {
     @Published var pendingTracks = 0          // số tracking chưa có thông tin của tem đang quét (0...3)
     @Published var pendingCodes: [String] = []   // các mã đã quét mà công ty không có (để người quét chọn mã chính)
     @Published var endRequired = false        // true: bắt buộc quét QR END CODE (pop-up chặn)
+    @Published var blockResult: LastResult? = nil   // kết quả kiện block để hiện trong màn chờ (không bị kết quả khác ghi đè)
+    @Published var blockHold = false          // true: vừa quét trúng kiện BLOCK — dừng nhận mã mới cho tới khi bấm "Quét tiếp tục"
     @Published var ocrDebug = ""            // các dòng chữ OCR đang đọc (hiện nhỏ trên màn quét để biết app đọc ra gì)
     @Published var hint: String?              // lý do app đang im lặng (vd. tem đã quét rồi) để không tưởng app hỏng
     private var hintTask: Task<Void, Never>?
@@ -132,7 +134,15 @@ final class AutoScanViewModel: ObservableObject {
         }
     }
 
+    /// Bấm "Quét tiếp tục" sau khi quét trúng kiện BLOCK: nhận mã mới trở lại.
+    func continueAfterBlock() {
+        blockHold = false; blockResult = nil
+        clearPending()
+        Haptics.tick()
+    }
+
     func handle(barcodes: [String]) {
+        if blockHold { return }          // đang chờ nhân viên bấm "Quét tiếp tục" (kiện block)
         let now = Date()
         // Trong khung có tem MỚI (chưa gửi) không? Nếu có thì tem cũ còn sót một phần không được nuốt chữ mã kho của tem mới
         let hasNew = barcodes.contains { raw in
@@ -200,6 +210,7 @@ final class AutoScanViewModel: ObservableObject {
     }
 
     func handle(lines: [String]) {
+        if blockHold { return }
         let shown = lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.prefix(6).joined(separator: " | ")
         if !shown.isEmpty, shown != ocrDebug { ocrDebug = shown }
         guard let hit = matcher.firstMatch(inLines: lines) else { return }
@@ -399,6 +410,7 @@ final class AutoScanViewModel: ObservableObject {
                         entries[0].note = (entries[0].note ?? "") + " · " + tr("ĐANG BLOCK")
                         last = LastResult(barcode: value, group: nil, warehouseText: customer.isEmpty ? nil : customer, message: bn, blocked: true)
                         Haptics.error(); ScanSound.block.play()
+                        clearPending(); blockResult = last; blockHold = true       // dừng quét: phải bấm "Quét tiếp tục" mới nhận mã tiếp theo
                     } else {
                         Haptics.success(); (biz ? ScanSound.business : ScanSound.found).play()
                     }
